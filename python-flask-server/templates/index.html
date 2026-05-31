@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CFDE REVEAL dataset search</title>
+  <style>
+    :root {
+      --portal-orange: #ff6600;
+      --portal-blue: #35669a;
+      --portal-gray-100: #f8f8f8;
+      --portal-gray-150: #f1f1f1;
+      --portal-gray-200: #eeeeee;
+      --portal-gray-300: #dddddd;
+      --portal-gray-500: #777777;
+      --portal-border: #d9d9d9;
+      --portal-text: #1f2933;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
+      color: var(--portal-text);
+      background: #ffffff;
+    }
+    a { color: var(--portal-blue); }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 1.5rem;
+      padding: 2rem;
+      align-items: start;
+    }
+    .sidebar, .panel, .card, .table-wrap {
+      background: #ffffff;
+      border: 1px solid var(--portal-border);
+      border-radius: 8px;
+    }
+    .sidebar {
+      padding: 1rem;
+      position: sticky;
+      top: 1rem;
+    }
+    .main {
+      display: grid;
+      gap: 1.5rem;
+    }
+    .panel, .card, .table-wrap {
+      padding: 1rem;
+    }
+    .portal-brand {
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+    .hero-kicker, .section-lead {
+      color: var(--portal-orange);
+      font-weight: 700;
+    }
+    .hero-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-top: 0.35rem;
+    }
+    .hero-subtitle {
+      max-width: 56rem;
+      margin-top: 0.35rem;
+    }
+    .chip-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+    .chip {
+      background: var(--portal-gray-200);
+      border: 1px solid var(--portal-gray-300);
+      border-radius: 10px;
+      padding: 0.15rem 0.65rem;
+    }
+    .note, .message {
+      margin-top: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--portal-gray-100);
+      border-left: 3px solid #7c757d;
+    }
+    .message.warning {
+      border-left-color: var(--portal-orange);
+    }
+    form.search-form {
+      display: grid;
+      gap: 1rem;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 0.35rem;
+    }
+    select, textarea, input[type="file"] {
+      width: 100%;
+      border: 1px solid var(--portal-border);
+      border-radius: 6px;
+      padding: 0.55rem 0.65rem;
+      font: inherit;
+      background: #fff;
+    }
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+    }
+    button {
+      background: var(--portal-blue);
+      color: #fff;
+      border: 1px solid var(--portal-blue);
+      border-radius: 6px;
+      padding: 0.65rem 0.95rem;
+      font: inherit;
+      cursor: pointer;
+    }
+    .card h3 {
+      margin-top: 0;
+      margin-bottom: 0.5rem;
+      font-size: 1.2rem;
+    }
+    .card p {
+      margin: 0.5rem 0;
+    }
+    .download-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .download-row a {
+      text-decoration: none;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--portal-blue);
+      border-radius: 6px;
+    }
+    details {
+      margin-top: 0.9rem;
+      background: var(--portal-gray-100);
+      border-radius: 6px;
+      padding: 0.65rem 0.8rem;
+    }
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .provenance-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 0.9rem;
+    }
+    .provenance-box {
+      border: 1px solid var(--portal-border);
+      border-radius: 6px;
+      background: #fff;
+      padding: 0.8rem;
+    }
+    .provenance-box ul {
+      margin: 0.5rem 0 0;
+      padding-left: 1.2rem;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--portal-gray-100);
+      padding: 0.6rem;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.55rem;
+      border-bottom: 1px solid var(--portal-gray-200);
+    }
+    @media (max-width: 960px) {
+      .layout, .provenance-grid {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>Filters</h2>
+      <form class="search-form" method="post" enctype="multipart/form-data">
+        <div>
+          <label for="resource">Resource</label>
+          <select id="resource" name="resource">
+            <option {% if selected_resource == "All" %}selected{% endif %}>All</option>
+            {% for option in resource_options %}
+            <option value="{{ option }}" {% if selected_resource == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="modality">Modality</label>
+          <select id="modality" name="modality">
+            <option {% if selected_modality == "All" %}selected{% endif %}>All</option>
+            {% for option in modality_options %}
+            <option value="{{ option }}" {% if selected_modality == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="tissue">Tissue / system</label>
+          <select id="tissue" name="tissue">
+            <option {% if selected_tissue == "All" %}selected{% endif %}>All</option>
+            {% for option in tissue_options %}
+            <option value="{{ option }}" {% if selected_tissue == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="gene_text">Paste gene list</label>
+          <textarea id="gene_text" name="gene_text" placeholder="ACTA1&#10;CKM&#10;MYH1&#10;...">{{ gene_text }}</textarea>
+        </div>
+        <div>
+          <label for="gene_file">Upload text file</label>
+          <input id="gene_file" name="gene_file" type="file" accept=".txt,.tsv,.csv">
+        </div>
+        <button type="submit">Rank datasets</button>
+      </form>
+    </aside>
+
+    <main class="main">
+      <section class="panel">
+        <div class="portal-brand">CFDE REVEAL dataset search</div>
+        <div class="hero-kicker">Turn your research question into reusable dataset leads</div>
+        <div class="hero-title">Find original datasets linked to your gene list, then inspect the evidence and provenance behind the match.</div>
+        <div class="hero-subtitle">Explore dataset-first matches from GTEx, MoTrPAC, and GEO. Each result foregrounds the source dataset and exposes the tracked file lineage used to derive the supporting signature.</div>
+        <div class="chip-row">
+          <div class="chip">GTEx</div>
+          <div class="chip">MoTrPAC</div>
+          <div class="chip">GEO</div>
+          <div class="chip">Dataset-first ranking</div>
+          <div class="chip">File-level provenance graph</div>
+        </div>
+        <div class="section-lead" style="margin-top: 1rem;">Tell us what you're studying or curious about:</div>
+        <div class="note">Detected genes: {{ query_genes|length }}</div>
+        {% if message %}
+        <div class="message {{ message[0] }}">{{ message[1] }}</div>
+        {% endif %}
+      </section>
+
+      <section class="panel">
+        <h3>Available gene sets</h3>
+        <p>Loaded from <a href="{{ gene_set_list_url }}" target="_blank" rel="noreferrer">{{ gene_set_list_url }}</a>.</p>
+        {% if gene_set_summaries %}
+        <p>{{ gene_set_summaries|length }} gene sets available.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Source</th>
+              <th>Category</th>
+              <th>Context</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in gene_set_summaries %}
+            <tr>
+              <td>{{ item.name }}</td>
+              <td>{{ item.source }}</td>
+              <td>{{ item.category }}</td>
+              <td>{{ item.context }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p>No gene sets were returned by the remote endpoint.</p>
+        {% endif %}
+      </section>
+
+      {% for card in cards %}
+      <section class="card">
+        <h3>{{ card.title }}</h3>
+        <div class="chip-row">
+          {% for badge in card.badges %}
+          <span class="chip">{{ badge }}</span>
+          {% endfor %}
+        </div>
+        <p><strong>Why this original dataset is relevant</strong> {{ card.rationale.relevance }}</p>
+        <p><strong>What you can reuse here</strong> {{ card.rationale.reuse }}</p>
+        <p><strong>Source entry point</strong> <a href="{{ card.landing_page }}" target="_blank" rel="noreferrer">Dataset page</a></p>
+        {% if card.primary_access_url %}
+        <p><strong>Primary data access</strong> <a href="{{ card.primary_access_url }}" target="_blank" rel="noreferrer">Open acquisition URL</a></p>
+        {% endif %}
+        <p><small>{{ card.access_route }}</small></p>
+
+        <details>
+          <summary>Shared biological signal and derived evidence</summary>
+          <p>Overlap score: {{ "%.4f"|format(card.scores.overlap_score) }}</p>
+          <p>Enrichment-like score: {{ "%.4f"|format(card.scores.enrichment_score) }}</p>
+          <p>Latent signature similarity: {{ "%.4f"|format(card.scores.latent_score) }}</p>
+          <p>Overlapping genes: {{ card.scores.overlapping_genes }}</p>
+          <p><small>{{ card.rationale.evidence }}</small></p>
+        </details>
+
+        <details>
+          <summary>Provenance graph</summary>
+          <div class="provenance-grid">
+            <div class="provenance-box">
+              <strong>Default file node</strong>
+              {% if card.default_node %}
+              <p>{{ card.default_node.label }}</p>
+              <p>Stage: {{ card.default_node.stage }}</p>
+              <p>Role(s): {{ card.default_node.role_summary or "n/a" }}</p>
+              {% if card.default_node.path %}<pre>{{ card.default_node.path }}</pre>{% endif %}
+              {% if card.default_node.sha256 %}<p><small>sha256: {{ card.default_node.sha256 }}</small></p>{% endif %}
+              {% if card.default_node.obtain_from_url %}<p><a href="{{ card.default_node.obtain_from_url }}" target="_blank" rel="noreferrer">Obtain this file</a></p>{% endif %}
+              {% if card.default_node.landing_page_url and card.default_node.landing_page_url != card.default_node.obtain_from_url %}<p><a href="{{ card.default_node.landing_page_url }}" target="_blank" rel="noreferrer">Dataset page</a></p>{% endif %}
+              {% endif %}
+            </div>
+            <div class="provenance-box">
+              <strong>Default processing step</strong>
+              {% if card.default_edge %}
+              <p>{{ card.default_edge.label }}</p>
+              <p>{{ card.default_edge.description }}</p>
+              {% if card.default_edge.command %}<pre>{{ card.default_edge.command }}</pre>{% endif %}
+              {% if card.default_edge.working_directory %}<p><small>Working directory: {{ card.default_edge.working_directory }}</small></p>{% endif %}
+              {% if card.default_edge.notebook_url %}<p><a href="{{ card.default_edge.notebook_url }}" target="_blank" rel="noreferrer">Notebook reference</a></p>{% endif %}
+              {% endif %}
+            </div>
+          </div>
+          <div class="provenance-grid">
+            <div class="provenance-box">
+              <strong>File nodes</strong>
+              <ul>
+                {% for node in card.nodes %}
+                <li>{{ node.label }} [{{ node.stage }}]</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div class="provenance-box">
+              <strong>Processing steps</strong>
+              <ul>
+                {% for edge in card.edges %}
+                <li>{{ edge.label }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <div class="download-row">
+          <a href="{{ url_for('download', card_id=card.card_id, kind='signature') }}">Signature TSV</a>
+          <a href="{{ url_for('download', card_id=card.card_id, kind='overlay') }}">Overlay JSON</a>
+          <a href="{{ url_for('download', card_id=card.card_id, kind='graph') }}">Graph JSON</a>
+          <a href="{{ url_for('download', card_id=card.card_id, kind='card') }}">Card JSON</a>
+        </div>
+      </section>
+      {% endfor %}
+
+      {% if result_rows %}
+      <section class="table-wrap">
+        <h3>Result table</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Card ID</th>
+              <th>Resource</th>
+              <th>Tissue / system</th>
+              <th>Overlap</th>
+              <th>Enrichment</th>
+              <th>Latent</th>
+              <th>Final</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in result_rows %}
+            <tr>
+              <td>{{ row.card_id }}</td>
+              <td>{{ row.resource_name }}</td>
+              <td>{{ row.tissue_or_system }}</td>
+              <td>{{ "%.4f"|format(row.overlap_score) }}</td>
+              <td>{{ "%.4f"|format(row.enrichment_score) }}</td>
+              <td>{{ "%.4f"|format(row.latent_score) }}</td>
+              <td>{{ "%.4f"|format(row.final_score) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 import pandas as pd
-import streamlit as st
+from flask import Flask, abort, render_template, request, send_file
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -16,176 +19,21 @@ if str(SRC_DIR) not in sys.path:
 
 from retrieval import RevealRetrievalIndex, normalize_gene_list  # noqa: E402
 
-try:
-    from streamlit_agraph import Edge, Node, _agraph
 
-    HAVE_AGRAPH = True
-except ImportError:
-    HAVE_AGRAPH = False
+app = Flask(__name__)
 
-
-st.set_page_config(page_title="CFDE-REVEAL Prototype", layout="wide")
-
-st.markdown(
-    """
-    <style>
-    :root {
-      --portal-orange: #ff6600;
-      --portal-blue: #35669a;
-      --portal-gray-100: #f8f8f8;
-      --portal-gray-150: #f1f1f1;
-      --portal-gray-200: #eeeeee;
-      --portal-gray-300: #dddddd;
-      --portal-gray-500: #777777;
-      --portal-border: #d9d9d9;
-      --portal-text: #1f2933;
-    }
-    html, body, [class*="css"] {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      font-size: 14px;
-    }
-    .stApp {
-      background: #ffffff;
-      color: var(--portal-text);
-    }
-    .block-container {
-      padding-top: 2rem;
-      padding-bottom: 3rem;
-    }
-    h1, h2, h3 {
-      font-family: inherit;
-      letter-spacing: normal;
-      color: var(--portal-text);
-    }
-    .portal-hero {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-      margin-bottom: 1.5rem;
-    }
-    .portal-brand {
-      font-size: 1.75em;
-      font-weight: 700;
-      line-height: 1em;
-      color: var(--portal-text);
-      max-width: 100%;
-      overflow-wrap: anywhere;
-    }
-    .hero-kicker {
-      font-size: 0.95rem;
-      font-weight: 700;
-      color: var(--portal-orange);
-      margin: 0;
-    }
-    .hero-title {
-      font-size: 1.2em;
-      font-weight: 700;
-      color: var(--portal-text);
-      margin: 0;
-    }
-    .hero-subtitle {
-      font-size: 1rem;
-      color: var(--portal-text);
-      max-width: 56rem;
-      margin: 0;
-    }
-    .chip-row {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      margin: 0.5rem 0 1rem 0;
-    }
-    .chip {
-      background: var(--portal-gray-200);
-      border: 0.5px solid var(--portal-gray-300);
-      border-radius: 10px;
-      padding: 0.15rem 0.65rem;
-      font-size: 0.95rem;
-    }
-    .result-title {
-      font-size: 1.2rem;
-      font-weight: 700;
-      margin-bottom: 0.35rem;
-    }
-    .section-lead {
-      color: var(--portal-orange);
-      font-size: 1.2em;
-      font-weight: 700;
-      margin: 0 0 0.35rem 0;
-    }
-    .portal-note {
-      display: block;
-      color: var(--portal-gray-500);
-      margin: 4px 0 8px 0;
-      padding: 4px 8px;
-      background-color: var(--portal-gray-100);
-      border-left: 3px solid #7c757d;
-    }
-    div[data-testid="stVerticalBlock"] > div[data-testid="stContainer"] {
-      background: #ffffff;
-      border: 1px solid var(--portal-border);
-      border-radius: 8px;
-      padding: 0.8rem 1rem 1rem;
-      box-shadow: none;
-    }
-    div[data-testid="stExpander"] {
-      border: none;
-    }
-    div[data-testid="stExpander"] details {
-      border: none;
-      background: transparent;
-    }
-    div[data-testid="stExpander"] summary {
-      background: var(--portal-gray-200);
-      border-radius: 5px;
-      padding: 10px 12px;
-    }
-    div[data-testid="stExpander"] summary:hover {
-      background: var(--portal-gray-300);
-    }
-    div[data-testid="stExpander"] details[open] summary {
-      margin-bottom: 0.75rem;
-    }
-    div.stButton > button, div.stDownloadButton > button {
-      background: var(--portal-blue);
-      color: #ffffff;
-      border: 1px solid var(--portal-blue);
-      border-radius: 0.25rem;
-    }
-    div.stButton > button:hover, div.stDownloadButton > button:hover {
-      background: #2b5680;
-      border-color: #2b5680;
-      color: #ffffff;
-    }
-    div[data-testid="stTextArea"] textarea, div[data-testid="stFileUploader"] section {
-      border-color: var(--portal-border);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+GENESET_API_ROOT = "https://translator.broadinstitute.org/genetics_provider/geneset_extractor"
+GENESET_LIST_URL = f"{GENESET_API_ROOT}/gene-sets"
 
 
-GRAPH_COLORS = {
-    "source": "#35669a",
-    "intermediate": "#ff6600",
-    "output": "#7c757d",
-}
-
-EDGE_COLORS = {
-    "source_preparation": "#ff6600",
-    "extractor_conversion": "#35669a",
-}
-
-
-@st.cache_resource
+@lru_cache(maxsize=1)
 def load_index() -> RevealRetrievalIndex:
     return RevealRetrievalIndex(APP_DIR / "data")
 
 
-@st.cache_data
-def load_manifest() -> pd.DataFrame:
-    return pd.read_parquet(APP_DIR.parent / "data" / "card_manifest.parquet")
+@lru_cache(maxsize=512)
+def load_json(path: str) -> dict[str, Any]:
+    return json.loads(resolve_bundle_path(path).read_text(encoding="utf-8"))
 
 
 def resolve_bundle_path(path: str) -> Path:
@@ -193,12 +41,70 @@ def resolve_bundle_path(path: str) -> Path:
     return raw if raw.is_absolute() else (APP_DIR.parent / raw)
 
 
-@st.cache_data
-def load_json(path: str) -> dict[str, Any]:
-    return json.loads(resolve_bundle_path(path).read_text(encoding="utf-8"))
+def _extract_gene_set_records(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if isinstance(payload, dict):
+        for key in ("gene_sets", "genesets", "items", "results", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+        return [payload]
+    return []
 
 
-def _format_species(row: pd.Series) -> str:
+@lru_cache(maxsize=1)
+def load_gene_sets() -> list[dict[str, Any]]:
+    with urlopen(GENESET_LIST_URL, timeout=20) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    return _extract_gene_set_records(payload)
+
+
+def _first_present(record: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        value = record.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def build_gene_set_summary(gene_sets: list[dict[str, Any]]) -> list[dict[str, str]]:
+    summaries: list[dict[str, str]] = []
+    for record in gene_sets:
+        name = _first_present(
+            record,
+            ("standard_name", "name", "label", "title", "geneset_name", "gene_set_name", "gene_set_id", "id"),
+        )
+        if not name:
+            continue
+        tags = record.get("tags")
+        if isinstance(tags, list):
+            context = ", ".join(str(tag) for tag in tags if str(tag).strip()) or "Unknown"
+        else:
+            context = _first_present(record, ("context", "tissue_or_system", "system", "organism", "tags")) or "Unknown"
+        summaries.append(
+            {
+                "name": name,
+                "source": _first_present(record, ("collection_name", "source", "resource_name", "resource", "provider")) or "Unknown",
+                "category": _first_present(record, ("license_code", "category", "modality", "type")) or "Unknown",
+                "context": context,
+            }
+        )
+    summaries.sort(key=lambda item: item["name"].lower())
+    return summaries
+
+
+def build_filter_options(gene_sets: list[dict[str, str]]) -> tuple[list[str], list[str], list[str]]:
+    resource_options = sorted({item["source"] for item in gene_sets if item["source"] != "Unknown"})
+    modality_options = sorted({item["category"] for item in gene_sets if item["category"] != "Unknown"})
+    tissue_options = sorted({item["context"] for item in gene_sets if item["context"] != "Unknown"})
+    return resource_options, modality_options, tissue_options
+
+
+def format_species(row: pd.Series) -> str:
     native = str(row["organism"])
     comparison = str(row["comparison_space_organism"])
     if native == comparison:
@@ -206,17 +112,13 @@ def _format_species(row: pd.Series) -> str:
     return f"{native} source, {comparison} comparison space"
 
 
-def _badge_values(row: pd.Series) -> list[str]:
+def badge_values(row: pd.Series) -> list[str]:
     return [
         str(row["resource_name"]),
         str(row["modality"]),
         str(row["tissue_or_system"]),
-        _format_species(row),
+        format_species(row),
     ]
-
-
-def _badge_row(values: list[str]) -> str:
-    return "".join(f'<span class="chip">{value}</span>' for value in values if value)
 
 
 def build_dataset_rationale(row: pd.Series) -> dict[str, str]:
@@ -242,7 +144,7 @@ def build_dataset_rationale(row: pd.Series) -> dict[str, str]:
     }
 
 
-def _download_payload(row: pd.Series, overlay: dict[str, Any], graph: dict[str, Any]) -> dict[str, Any]:
+def build_download_payload(row: pd.Series, overlay: dict[str, Any], graph: dict[str, Any]) -> dict[str, Any]:
     payload = row.to_dict()
     payload["provenance"] = overlay
     payload["provenance_graph"] = graph
@@ -250,322 +152,155 @@ def _download_payload(row: pd.Series, overlay: dict[str, Any], graph: dict[str, 
     return payload
 
 
-def _node_title(node: dict[str, Any]) -> str:
-    lines = [
-        node["label"],
-        f"Stage: {node.get('stage', 'unknown')}",
-        f"Role(s): {node.get('role_summary', '')}",
-    ]
-    if node.get("path"):
-        lines.append(str(node["path"]))
-    return "\n".join(lines)
-
-
-def _graph_nodes(graph: dict[str, Any]) -> list[Node]:
-    out: list[Node] = []
-    for node in graph["nodes"]:
-        stage = str(node.get("stage", "source"))
-        out.append(
-            Node(
-                id=str(node["id"]),
-                label=str(node["label"]),
-                title=_node_title(node),
-                shape="box" if stage != "output" else "ellipse",
-                size=24 if stage != "output" else 22,
-                color=GRAPH_COLORS.get(stage, "#6b7280"),
-            )
-        )
-    return out
-
-
-def _graph_edges(graph: dict[str, Any]) -> list[Edge]:
-    out: list[Edge] = []
-    dense_graph = len(graph["edges"]) > 40
-    for edge in graph["edges"]:
-        out.append(
-            Edge(
-                source=str(edge["source"]),
-                target=str(edge["target"]),
-                label="" if dense_graph else str(edge["label"]),
-                color=EDGE_COLORS.get(str(edge.get("edge_kind", "")), "#7c8793"),
-                smooth=not dense_graph,
-            )
-        )
-    return out
-
-
-def _graph_config(graph: dict[str, Any]) -> dict[str, Any]:
-    dense_graph = len(graph["edges"]) > 40
-    return {
-        "width": "1100px",
-        "height": "550px",
-        "autoResize": True,
-        "layout": {
-            "hierarchical": {
-                "enabled": dense_graph,
-                "direction": "LR",
-                "sortMethod": "directed",
-                "nodeSpacing": 180,
-                "levelSeparation": 220,
-            },
-            "improvedLayout": True,
-            "randomSeed": 17,
-        },
-        "interaction": {
-            "hover": True,
-            "tooltipDelay": 120,
-            "dragView": True,
-            "zoomView": True,
-        },
-        "physics": {
-            "enabled": False,
-            "stabilization": {
-                "enabled": False,
-            },
-        },
-        "edges": {
-            "font": {"size": 10},
-        },
-    }
-
-
-def _render_agraph(graph: dict[str, Any], key: str) -> str | None:
-    if not HAVE_AGRAPH:
-        return None
-    nodes_data = [node.to_dict() for node in _graph_nodes(graph)]
-    edges_data = [edge.to_dict() for edge in _graph_edges(graph)]
-    config_json = json.dumps(_graph_config(graph))
-    data_json = json.dumps({"nodes": nodes_data, "edges": edges_data})
-    return _agraph(data=data_json, config=config_json, key=key)
-
-
-def _select_defaults(graph: dict[str, Any], key_prefix: str, clicked: str | None, node_map: dict[str, Any], edge_map: dict[str, Any]) -> tuple[str, str]:
-    node_key = f"{key_prefix}_node"
-    edge_key = f"{key_prefix}_edge"
-    if node_key not in st.session_state:
-        st.session_state[node_key] = graph.get("default_node_id") or next(iter(node_map))
-    if edge_key not in st.session_state:
-        st.session_state[edge_key] = graph.get("default_edge_id") or next(iter(edge_map))
-    if clicked in node_map:
-        st.session_state[node_key] = clicked
-    elif clicked in edge_map:
-        st.session_state[edge_key] = clicked
-    return st.session_state[node_key], st.session_state[edge_key]
-
-
-def _render_node_detail(node: dict[str, Any], key_prefix: str) -> None:
-    st.markdown(f"**{node['label']}**")
-    st.write(node.get("description", ""))
-    st.write(f"Stage: {node.get('stage', 'unknown')}")
-    st.write(f"Role(s): {node.get('role_summary', 'n/a')}")
-    st.code(str(node.get("path", "")), language="text")
-    if node.get("sha256"):
-        st.caption(f"sha256: {node['sha256']}")
-    if node.get("obtain_from_url"):
-        st.markdown(f"[Obtain this file]({node['obtain_from_url']})")
-    if node.get("landing_page_url") and node.get("landing_page_url") != node.get("obtain_from_url"):
-        st.markdown(f"[Dataset page]({node['landing_page_url']})")
-    st.caption(node.get("access_route", ""))
-
-
-def _render_edge_detail(edge: dict[str, Any], key_prefix: str) -> None:
-    st.markdown(f"**{edge['label']}**")
-    st.write(edge.get("description", ""))
-    st.code(str(edge.get("command", "")), language="bash")
-    if edge.get("working_directory"):
-        st.caption(f"Working directory: {edge['working_directory']}")
-    if edge.get("script_path"):
-        st.markdown(f"Script path: `{edge['script_path']}`")
-        script_path = resolve_bundle_path(str(edge["script_path"]))
-        if script_path.exists():
-            with st.expander("Preview script source", expanded=False):
-                try:
-                    st.code(script_path.read_text(encoding="utf-8"), language="python")
-                except UnicodeDecodeError:
-                    st.write("Script exists but could not be decoded as UTF-8.")
-    if edge.get("notebook_url"):
-        st.markdown(f"[Notebook reference]({edge['notebook_url']})")
-    if edge.get("parameters"):
-        with st.expander("Command parameters", expanded=False):
-            st.json(edge["parameters"])
-
-
-def render_provenance_panel(graph: dict[str, Any], key_prefix: str) -> None:
+def build_card_view(row: pd.Series) -> dict[str, Any]:
+    overlay = load_json(str(row["provenance_path"]))
+    graph = load_json(str(row["provenance_graph_path"]))
+    rationale = build_dataset_rationale(row)
     node_map = {str(node["id"]): node for node in graph["nodes"]}
     edge_map = {str(edge["id"]): edge for edge in graph["edges"]}
 
-    clicked: str | None = None
-    if HAVE_AGRAPH:
-        clicked = _render_agraph(graph, key=f"{key_prefix}_agraph")
-        st.caption("Use the graph to focus a node. Step details are available in the processing-step selector below.")
-    else:
-        st.info("Install `streamlit-agraph` to enable the interactive graph. The selector-based provenance details remain available.")
+    default_node_id = str(graph.get("default_node_id") or next(iter(node_map), ""))
+    default_edge_id = str(graph.get("default_edge_id") or next(iter(edge_map), ""))
 
-    default_node_id, default_edge_id = _select_defaults(graph, key_prefix, clicked, node_map, edge_map)
-
-    node_ids = list(node_map)
-    edge_ids = list(edge_map)
-    selected_node_id = st.selectbox(
-        "File node",
-        node_ids,
-        index=node_ids.index(default_node_id),
-        key=f"{key_prefix}_node",
-        format_func=lambda value: f"{node_map[value]['label']} [{node_map[value]['stage']}]",
-    )
-    selected_edge_id = st.selectbox(
-        "Processing step",
-        edge_ids,
-        index=edge_ids.index(default_edge_id),
-        key=f"{key_prefix}_edge",
-        format_func=lambda value: edge_map[value]["label"],
-    )
-
-    left, right = st.columns(2)
-    with left:
-        _render_node_detail(node_map[selected_node_id], key_prefix)
-    with right:
-        _render_edge_detail(edge_map[selected_edge_id], key_prefix)
-
-
-def main() -> None:
-    idx = load_index()
-    manifest = load_manifest()
-
-    st.markdown(
-        """
-        <div class="portal-hero">
-          <div class="portal-brand">CFDE REVEAL dataset search</div>
-          <div class="hero-kicker">Turn your research question into reusable dataset leads</div>
-          <div class="hero-title">Find original datasets linked to your gene list, then inspect the evidence and provenance behind the match.</div>
-          <div class="hero-subtitle">Explore dataset-first matches from GTEx, MoTrPAC, and GEO. Each result foregrounds the source dataset and exposes the tracked file lineage used to derive the supporting signature.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<div class="chip-row"><div class="chip">GTEx</div><div class="chip">MoTrPAC</div><div class="chip">GEO</div><div class="chip">Dataset-first ranking</div><div class="chip">File-level provenance graph</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    with st.sidebar:
-        st.subheader("Filters")
-        resource = st.selectbox("Resource", ["All"] + sorted(manifest["resource_name"].unique().tolist()))
-        modality = st.selectbox("Modality", ["All"] + sorted(manifest["modality"].unique().tolist()))
-        tissue = st.selectbox("Tissue / system", ["All"] + sorted(manifest["tissue_or_system"].unique().tolist()))
-
-    st.markdown('<div class="section-lead">Tell us what you\'re studying or curious about:</div>', unsafe_allow_html=True)
-    left, right = st.columns([3, 2])
-    with left:
-        gene_text = st.text_area("Paste gene list", height=180, placeholder="ACTA1\nCKM\nMYH1\n...")
-    with right:
-        upload = st.file_uploader("Upload text file", type=["txt", "tsv", "csv"])
-        if upload is not None and not gene_text.strip():
-            gene_text = upload.getvalue().decode("utf-8")
-            st.caption("Loaded genes from uploaded file.")
-
-    query_genes = normalize_gene_list(gene_text)
-    st.markdown(f'<div class="portal-note">Detected genes: {len(query_genes)}</div>', unsafe_allow_html=True)
-
-    filters = {
-        "resource_name": None if resource == "All" else resource,
-        "modality": None if modality == "All" else modality,
-        "tissue_or_system": None if tissue == "All" else tissue,
+    return {
+        "card_id": str(row["card_id"]),
+        "title": str(row["dataset_unit_title"]),
+        "badges": badge_values(row),
+        "rationale": rationale,
+        "landing_page": str(row["landing_page"]),
+        "access_route": str(row["access_route"]),
+        "primary_access_url": overlay.get("primary_access_url"),
+        "scores": {
+            "overlap_score": float(row["overlap_score"]),
+            "enrichment_score": float(row["enrichment_score"]),
+            "latent_score": float(row["latent_score"]),
+            "overlapping_genes": str(row["overlapping_genes"] or "none"),
+        },
+        "overlay": overlay,
+        "graph": graph,
+        "default_node": node_map.get(default_node_id),
+        "default_edge": edge_map.get(default_edge_id),
+        "nodes": list(node_map.values()),
+        "edges": list(edge_map.values()),
+        "downloads": {
+            "signature": str(row["signature_path"]),
+            "overlay": overlay,
+            "graph": graph,
+            "card": build_download_payload(row, overlay, graph),
+        },
     }
 
-    if not query_genes:
-        st.info("Enter or upload a gene list to rank relevant datasets.")
-        return
 
-    results = idx.score_query(query_genes, filters=filters, top_k=20)
-    if results.empty:
-        st.warning("No cards matched the current filters.")
-        return
+def extract_query_text() -> str:
+    gene_text = request.form.get("gene_text", "")
+    upload = request.files.get("gene_file")
+    if upload and not gene_text.strip():
+        return upload.read().decode("utf-8")
+    return gene_text
 
-    st.markdown('<div class="section-lead">Ranked original datasets</div>', unsafe_allow_html=True)
-    for _, row in results.iterrows():
-        overlay = load_json(str(row["provenance_path"]))
-        graph = load_json(str(row["provenance_graph_path"]))
-        rationale = build_dataset_rationale(row)
-        payload = _download_payload(row, overlay, graph)
 
-        with st.container(border=True):
-            st.markdown(f'<div class="result-title">{row["dataset_unit_title"]}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="chip-row">{_badge_row(_badge_values(row))}</div>', unsafe_allow_html=True)
-            st.markdown(f"**Why this original dataset is relevant**  {rationale['relevance']}")
-            st.markdown(f"**What you can reuse here**  {rationale['reuse']}")
-            st.markdown(
-                "**Source entry point**  "
-                f"[Dataset page]({row['landing_page']})"
-            )
-            if overlay.get("primary_access_url"):
-                st.markdown(
-                    "**Primary data access**  "
-                    f"[Open acquisition URL]({overlay['primary_access_url']})"
-                )
-            st.caption(str(row["access_route"]))
+@app.route("/", methods=["GET", "POST"])
+def index() -> str:
+    gene_set_summaries: list[dict[str, str]] = []
+    resource_options: list[str] = []
+    modality_options: list[str] = []
+    tissue_options: list[str] = []
 
-            with st.expander("Shared biological signal and derived evidence", expanded=False):
-                st.write(f"Overlap score: {row['overlap_score']:.4f}")
-                st.write(f"Enrichment-like score: {row['enrichment_score']:.4f}")
-                st.write(f"Latent signature similarity: {row['latent_score']:.4f}")
-                st.write(f"Overlapping genes: {row['overlapping_genes'] or 'none'}")
-                st.caption(rationale["evidence"])
+    gene_text = ""
+    query_genes: list[str] = []
+    selected_resource = "All"
+    selected_modality = "All"
+    selected_tissue = "All"
+    cards: list[dict[str, Any]] = []
+    result_rows: list[dict[str, Any]] = []
+    message: tuple[str, str] | None = None
 
-            with st.expander("Provenance graph", expanded=False):
-                render_provenance_panel(graph, key_prefix=f"card_{row['card_id']}")
+    try:
+        gene_set_summaries = build_gene_set_summary(load_gene_sets())
+        resource_options, modality_options, tissue_options = build_filter_options(gene_set_summaries)
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        message = ("warning", f"Could not load gene sets from {GENESET_LIST_URL}: {exc}")
 
-            dl1, dl2, dl3, dl4 = st.columns(4)
-            with dl1:
-                st.download_button(
-                    "Signature TSV",
-                    resolve_bundle_path(str(row["signature_path"])).read_bytes(),
-                    file_name=f"{row['card_id']}.geneset.tsv",
-                    key=f"dl_sig_{row['card_id']}",
-                )
-            with dl2:
-                st.download_button(
-                    "Overlay JSON",
-                    json.dumps(overlay, indent=2).encode("utf-8"),
-                    file_name=f"{row['card_id']}.overlay.json",
-                    key=f"dl_overlay_{row['card_id']}",
-                )
-            with dl3:
-                st.download_button(
-                    "Graph JSON",
-                    json.dumps(graph, indent=2).encode("utf-8"),
-                    file_name=f"{row['card_id']}.graph.json",
-                    key=f"dl_graph_{row['card_id']}",
-                )
-            with dl4:
-                st.download_button(
-                    "Card JSON",
-                    json.dumps(payload, indent=2, default=str).encode("utf-8"),
-                    file_name=f"{row['card_id']}.card.json",
-                    key=f"dl_card_{row['card_id']}",
-                )
+    if request.method == "POST":
+        gene_text = extract_query_text()
+        query_genes = normalize_gene_list(gene_text)
+        selected_resource = request.form.get("resource", "All")
+        selected_modality = request.form.get("modality", "All")
+        selected_tissue = request.form.get("tissue", "All")
 
-    with st.expander("Result table", expanded=False):
-        st.dataframe(
-            results[
-                [
-                    "card_id",
-                    "resource_name",
-                    "tissue_or_system",
-                    "overlap_score",
-                    "enrichment_score",
-                    "latent_score",
-                    "final_score",
-                ]
-            ],
-            width="stretch",
-        )
+        if not query_genes:
+            message = ("info", "Enter or upload a gene list to rank relevant datasets.")
+        else:
+            filters = {
+                "resource_name": None if selected_resource == "All" else selected_resource,
+                "modality": None if selected_modality == "All" else selected_modality,
+                "tissue_or_system": None if selected_tissue == "All" else selected_tissue,
+            }
+            results = load_index().score_query(query_genes, filters=filters, top_k=20)
+            if results.empty:
+                message = ("warning", "No cards matched the current filters.")
+            else:
+                cards = [build_card_view(row) for _, row in results.iterrows()]
+                result_rows = results[
+                    [
+                        "card_id",
+                        "resource_name",
+                        "tissue_or_system",
+                        "overlap_score",
+                        "enrichment_score",
+                        "latent_score",
+                        "final_score",
+                    ]
+                ].to_dict(orient="records")
 
-    with st.expander("Full provenance viewer", expanded=False):
-        chosen = st.selectbox("Select card", results["card_id"].tolist())
-        selected = results[results["card_id"] == chosen].iloc[0]
-        graph = load_json(str(selected["provenance_graph_path"]))
-        render_provenance_panel(graph, key_prefix="full_viewer")
+    return render_template(
+        "index.html",
+        resource_options=resource_options,
+        modality_options=modality_options,
+        tissue_options=tissue_options,
+        gene_text=gene_text,
+        query_genes=query_genes,
+        selected_resource=selected_resource,
+        selected_modality=selected_modality,
+        selected_tissue=selected_tissue,
+        cards=cards,
+        result_rows=result_rows,
+        gene_set_summaries=gene_set_summaries,
+        gene_set_list_url=GENESET_LIST_URL,
+        message=message,
+    )
+
+
+@app.route("/download/<card_id>/<kind>")
+def download(card_id: str, kind: str):
+    idx = load_index()
+    matches = idx.cards[idx.cards["card_id"].astype(str) == card_id]
+    if matches.empty:
+        abort(404)
+
+    row = matches.iloc[0]
+    overlay = load_json(str(row["provenance_path"]))
+    graph = load_json(str(row["provenance_graph_path"]))
+
+    if kind == "signature":
+        path = resolve_bundle_path(str(row["signature_path"]))
+        return send_file(path, as_attachment=True, download_name=f"{card_id}.geneset.tsv")
+
+    payloads = {
+        "overlay": (overlay, f"{card_id}.overlay.json"),
+        "graph": (graph, f"{card_id}.graph.json"),
+        "card": (build_download_payload(row, overlay, graph), f"{card_id}.card.json"),
+    }
+    if kind not in payloads:
+        abort(404)
+
+    payload, filename = payloads[kind]
+    return app.response_class(
+        json.dumps(payload, indent=2, default=str),
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=8000, debug=True)
