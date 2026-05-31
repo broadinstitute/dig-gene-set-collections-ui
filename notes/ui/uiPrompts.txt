@@ -1,0 +1,12 @@
+
+
+add a html ref link to each entry in the gene set list that links to the gene set details 
+page, using the 
+/gene-set?gene_set_id=<gene_set_id> call to get return the data 
+and the 
+/gene_set_provenance?gene_set_id=<gene_set_id> call to return 
+the json element knowledge_graph from which to populate the graph display widget
+
+
+
+

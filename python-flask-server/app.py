@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -24,6 +25,8 @@ app = Flask(__name__)
 
 GENESET_API_ROOT = "https://translator.broadinstitute.org/genetics_provider/geneset_extractor"
 GENESET_LIST_URL = f"{GENESET_API_ROOT}/gene-sets"
+GENESET_DETAIL_URL = f"{GENESET_API_ROOT}/gene-set"
+GENESET_PROVENANCE_URL = f"{GENESET_API_ROOT}/gene_set_provenance"
 
 
 @lru_cache(maxsize=1)
@@ -55,9 +58,30 @@ def _extract_gene_set_records(payload: Any) -> list[dict[str, Any]]:
 
 @lru_cache(maxsize=1)
 def load_gene_sets() -> list[dict[str, Any]]:
-    with urlopen(GENESET_LIST_URL, timeout=20) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    payload = fetch_remote_json(GENESET_LIST_URL)
     return _extract_gene_set_records(payload)
+
+
+@lru_cache(maxsize=512)
+def fetch_remote_json(url: str) -> dict[str, Any] | list[Any]:
+    with urlopen(url, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+@lru_cache(maxsize=512)
+def load_gene_set_detail(gene_set_id: int) -> dict[str, Any]:
+    payload = fetch_remote_json(f"{GENESET_DETAIL_URL}?gene_set_id={gene_set_id}")
+    if not isinstance(payload, dict):
+        raise ValueError(f"Unexpected detail payload for gene_set_id={gene_set_id}")
+    return payload
+
+
+@lru_cache(maxsize=512)
+def load_gene_set_provenance(gene_set_id: int) -> dict[str, Any]:
+    payload = fetch_remote_json(f"{GENESET_PROVENANCE_URL}?gene_set_id={gene_set_id}")
+    if not isinstance(payload, dict):
+        raise ValueError(f"Unexpected provenance payload for gene_set_id={gene_set_id}")
+    return payload
 
 
 def _first_present(record: dict[str, Any], keys: tuple[str, ...]) -> str | None:
@@ -71,8 +95,8 @@ def _first_present(record: dict[str, Any], keys: tuple[str, ...]) -> str | None:
     return None
 
 
-def build_gene_set_summary(gene_sets: list[dict[str, Any]]) -> list[dict[str, str]]:
-    summaries: list[dict[str, str]] = []
+def build_gene_set_summary(gene_sets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
     for record in gene_sets:
         name = _first_present(
             record,
@@ -87,6 +111,7 @@ def build_gene_set_summary(gene_sets: list[dict[str, Any]]) -> list[dict[str, st
             context = _first_present(record, ("context", "tissue_or_system", "system", "organism", "tags")) or "Unknown"
         summaries.append(
             {
+                "gene_set_id": int(record.get("gene_set_id")) if record.get("gene_set_id") is not None else None,
                 "name": name,
                 "source": _first_present(record, ("collection_name", "source", "resource_name", "resource", "provider")) or "Unknown",
                 "category": _first_present(record, ("license_code", "category", "modality", "type")) or "Unknown",
@@ -97,11 +122,106 @@ def build_gene_set_summary(gene_sets: list[dict[str, Any]]) -> list[dict[str, st
     return summaries
 
 
-def build_filter_options(gene_sets: list[dict[str, str]]) -> tuple[list[str], list[str], list[str]]:
+def build_filter_options(gene_sets: list[dict[str, Any]]) -> tuple[list[str], list[str], list[str]]:
     resource_options = sorted({item["source"] for item in gene_sets if item["source"] != "Unknown"})
     modality_options = sorted({item["category"] for item in gene_sets if item["category"] != "Unknown"})
     tissue_options = sorted({item["context"] for item in gene_sets if item["context"] != "Unknown"})
     return resource_options, modality_options, tissue_options
+
+
+def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
+    nodes = knowledge_graph.get("nodes", [])
+    edges = knowledge_graph.get("edges", [])
+    width = 900
+    height = 520
+    cx = width / 2
+    cy = height / 2
+    radius = max(120, min(width, height) * 0.34)
+    count = max(len(nodes), 1)
+    positions: dict[str, tuple[float, float]] = {}
+
+    for idx, node in enumerate(nodes):
+        angle = (2 * math.pi * idx / count) - (math.pi / 2)
+        positions[str(node["id"])] = (
+            cx + radius * math.cos(angle),
+            cy + radius * math.sin(angle),
+        )
+
+    svg_edges: list[dict[str, Any]] = []
+    for edge in edges:
+        source = positions.get(str(edge.get("source")))
+        target = positions.get(str(edge.get("target")))
+        if not source or not target:
+            continue
+        svg_edges.append(
+            {
+                "x1": source[0],
+                "y1": source[1],
+                "x2": target[0],
+                "y2": target[1],
+                "label": str(edge.get("label", "")),
+            }
+        )
+
+    svg_nodes: list[dict[str, Any]] = []
+    for node in nodes:
+        node_id = str(node["id"])
+        x, y = positions[node_id]
+        node_type = str(node.get("type", "Node"))
+        if node_type == "GeneSet":
+            color = "#ff6600"
+        elif "Analysis" in node_type:
+            color = "#35669a"
+        else:
+            color = "#7c757d"
+        svg_nodes.append(
+            {
+                "id": node_id,
+                "label": str(node.get("name") or node.get("label") or node_id),
+                "type": node_type,
+                "description": str(node.get("description", "")),
+                "x": x,
+                "y": y,
+                "color": color,
+            }
+        )
+
+    return {
+        "width": width,
+        "height": height,
+        "nodes": svg_nodes,
+        "edges": svg_edges,
+    }
+
+
+def build_gene_set_page(detail: dict[str, Any], provenance: dict[str, Any]) -> dict[str, Any]:
+    knowledge_graph = provenance.get("knowledge_graph")
+    if not isinstance(knowledge_graph, dict):
+        knowledge_graph = detail.get("knowledge_graph", {})
+
+    genes = detail.get("gene_symbols", [])
+    gene_symbols = [str(item.get("symbol")) for item in genes if isinstance(item, dict) and item.get("symbol")]
+
+    return {
+        "gene_set_id": detail.get("gene_set_id"),
+        "standard_name": detail.get("standard_name") or detail.get("card_id"),
+        "collection_name": detail.get("collection_name") or detail.get("resource_name"),
+        "license_code": detail.get("license_code"),
+        "card_id": detail.get("card_id"),
+        "dataset_unit_title": detail.get("dataset_unit_title"),
+        "contrast_label": detail.get("contrast_label"),
+        "organism": detail.get("organism"),
+        "comparison_space_organism": detail.get("comparison_space_organism"),
+        "modality": detail.get("modality"),
+        "gene_symbols": gene_symbols,
+        "graph": build_graph_view(knowledge_graph),
+        "graph_nodes": knowledge_graph.get("nodes", []),
+        "graph_edges": knowledge_graph.get("edges", []),
+        "detail_json": detail,
+        "provenance_json": provenance,
+        "detail_url": f"{GENESET_DETAIL_URL}?gene_set_id={detail.get('gene_set_id')}",
+        "provenance_url": f"{GENESET_PROVENANCE_URL}?gene_set_id={detail.get('gene_set_id')}",
+    }
 
 
 def format_species(row: pd.Series) -> str:
@@ -268,6 +388,20 @@ def index() -> str:
         gene_set_summaries=gene_set_summaries,
         gene_set_list_url=GENESET_LIST_URL,
         message=message,
+    )
+
+
+@app.route("/gene-sets/<int:gene_set_id>")
+def gene_set_detail(gene_set_id: int) -> str:
+    try:
+        detail = load_gene_set_detail(gene_set_id)
+        provenance = load_gene_set_provenance(gene_set_id)
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        abort(502, description=f"Could not load gene set {gene_set_id}: {exc}")
+
+    return render_template(
+        "gene_set_detail.html",
+        page=build_gene_set_page(detail, provenance),
     )
 
 

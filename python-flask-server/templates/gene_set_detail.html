@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ page.standard_name }}</title>
+  <style>
+    :root {
+      --portal-orange: #ff6600;
+      --portal-blue: #35669a;
+      --portal-gray-100: #f8f8f8;
+      --portal-gray-200: #eeeeee;
+      --portal-gray-300: #dddddd;
+      --portal-border: #d9d9d9;
+      --portal-text: #1f2933;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #fff;
+      color: var(--portal-text);
+      line-height: 1.45;
+    }
+    a { color: var(--portal-blue); }
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      gap: 1.5rem;
+    }
+    .panel {
+      border: 1px solid var(--portal-border);
+      border-radius: 8px;
+      padding: 1rem;
+      background: #fff;
+    }
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .chip {
+      background: var(--portal-gray-200);
+      border: 1px solid var(--portal-gray-300);
+      border-radius: 10px;
+      padding: 0.15rem 0.65rem;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    .graph-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--portal-border);
+      border-radius: 8px;
+      background: var(--portal-gray-100);
+      padding: 0.5rem;
+    }
+    .legend {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.75rem;
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .swatch {
+      width: 0.8rem;
+      height: 0.8rem;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    .gene-list {
+      columns: 4 12rem;
+      column-gap: 1.5rem;
+      padding-left: 1.2rem;
+      margin: 0;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--portal-gray-100);
+      border-radius: 6px;
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .node-list, .edge-list {
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+    .small {
+      color: #666;
+      font-size: 0.95rem;
+    }
+    @media (max-width: 900px) {
+      .meta-grid {
+        grid-template-columns: 1fr;
+      }
+      .gene-list {
+        columns: 2 12rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="panel">
+      <p><a href="{{ url_for('index') }}">Back to search</a></p>
+      <h1>{{ page.standard_name }}</h1>
+      <div class="chip-row">
+        <span class="chip">Gene set ID: {{ page.gene_set_id }}</span>
+        {% if page.collection_name %}<span class="chip">{{ page.collection_name }}</span>{% endif %}
+        {% if page.modality %}<span class="chip">{{ page.modality }}</span>{% endif %}
+        {% if page.organism %}<span class="chip">{{ page.organism }}</span>{% endif %}
+        {% if page.license_code %}<span class="chip">{{ page.license_code }}</span>{% endif %}
+      </div>
+      {% if page.contrast_label %}<p>{{ page.contrast_label }}</p>{% endif %}
+      <p class="small">
+        Detail source:
+        <a href="{{ page.detail_url }}" target="_blank" rel="noreferrer">{{ page.detail_url }}</a><br>
+        Provenance source:
+        <a href="{{ page.provenance_url }}" target="_blank" rel="noreferrer">{{ page.provenance_url }}</a>
+      </p>
+    </div>
+
+    <div class="panel meta-grid">
+      <section>
+        <h2>Summary</h2>
+        <p><strong>Card ID:</strong> {{ page.card_id or "n/a" }}</p>
+        <p><strong>Dataset title:</strong> {{ page.dataset_unit_title or "n/a" }}</p>
+        <p><strong>Comparison organism:</strong> {{ page.comparison_space_organism or "n/a" }}</p>
+        <p><strong>Gene count:</strong> {{ page.gene_symbols|length }}</p>
+      </section>
+      <section>
+        <h2>Knowledge Graph</h2>
+        <p><strong>Nodes:</strong> {{ page.graph_nodes|length }}</p>
+        <p><strong>Edges:</strong> {{ page.graph_edges|length }}</p>
+      </section>
+    </div>
+
+    <div class="panel">
+      <h2>Graph</h2>
+      <div class="legend">
+        <span><i class="swatch" style="background:#ff6600"></i>Gene set</span>
+        <span><i class="swatch" style="background:#35669a"></i>Analysis</span>
+        <span><i class="swatch" style="background:#7c757d"></i>File</span>
+      </div>
+      <div class="graph-wrap">
+        <svg viewBox="0 0 {{ page.graph.width }} {{ page.graph.height }}" width="100%" height="{{ page.graph.height }}" role="img" aria-label="Knowledge graph">
+          {% for edge in page.graph.edges %}
+          <line x1="{{ edge.x1 }}" y1="{{ edge.y1 }}" x2="{{ edge.x2 }}" y2="{{ edge.y2 }}" stroke="#b3bcc5" stroke-width="2" />
+          {% endfor %}
+          {% for node in page.graph.nodes %}
+          <circle cx="{{ node.x }}" cy="{{ node.y }}" r="20" fill="{{ node.color }}" />
+          <text x="{{ node.x }}" y="{{ node.y + 38 }}" text-anchor="middle" font-size="12" fill="#1f2933">{{ node.label[:28] }}</text>
+          <title>{{ node.type }}{% if node.description %}: {{ node.description }}{% endif %}</title>
+          {% endfor %}
+        </svg>
+      </div>
+    </div>
+
+    <div class="panel meta-grid">
+      <section>
+        <h2>Graph Nodes</h2>
+        <ul class="node-list">
+          {% for node in page.graph_nodes %}
+          <li>
+            <strong>{{ node.name or node.id }}</strong>
+            ({{ node.type or "Node" }})
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      <section>
+        <h2>Graph Edges</h2>
+        <ul class="edge-list">
+          {% for edge in page.graph_edges %}
+          <li>{{ edge.label or edge.id }}: {{ edge.source }} -> {{ edge.target }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+    </div>
+
+    <div class="panel">
+      <h2>Gene Symbols</h2>
+      <ul class="gene-list">
+        {% for symbol in page.gene_symbols %}
+        <li>{{ symbol }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="panel">
+      <h2>Detail JSON</h2>
+      <pre>{{ page.detail_json | tojson(indent=2) }}</pre>
+    </div>
+
+    <div class="panel">
+      <h2>Provenance JSON</h2>
+      <pre>{{ page.provenance_json | tojson(indent=2) }}</pre>
+    </div>
+  </main>
+</body>
+</html>

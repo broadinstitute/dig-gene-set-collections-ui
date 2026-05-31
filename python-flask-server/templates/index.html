@@ -264,6 +264,7 @@
           <thead>
             <tr>
               <th>Name</th>
+              <th>ID</th>
               <th>Source</th>
               <th>Category</th>
               <th>Context</th>
@@ -272,7 +273,14 @@
           <tbody>
             {% for item in gene_set_summaries %}
             <tr>
-              <td>{{ item.name }}</td>
+              <td>
+                {% if item.gene_set_id is not none %}
+                <a href="{{ url_for('gene_set_detail', gene_set_id=item.gene_set_id) }}">{{ item.name }}</a>
+                {% else %}
+                {{ item.name }}
+                {% endif %}
+              </td>
+              <td>{{ item.gene_set_id if item.gene_set_id is not none else "" }}</td>
               <td>{{ item.source }}</td>
               <td>{{ item.category }}</td>
               <td>{{ item.context }}</td>
