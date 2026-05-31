@@ -1,0 +1,7 @@
+sample_id	perturbation_id	perturbation_type	cell_type_or_line	timepoint	gene_symbol	compound_id	is_control	control_type	query_group	query_label
+BR00117012__A05	BRD-K48278478-001-01-2	compound	U2OS	48	KCNN4	BRD-K48278478-001-01-2	false		BRD-K48278478-001-01-2	KCNN4_compound_quinine
+BR00117012__A06	BRD-K36574127-001-01-3	compound	U2OS	48	NTRK1	BRD-K36574127-001-01-3	false		BRD-K36574127-001-01-3	NTRK1_compound_LOXO101
+BR00117022__A06	ccsbBroad304_00902	orf	U2OS	48	KCNN4		false		ccsbBroad304_00902	KCNN4_orf
+BR00117022__D01	ccsbBroad304_14720	orf	U2OS	48	NTRK1		false		ccsbBroad304_14720	NTRK1_orf
+BR00117022__O17	ccsbBroad304_00902	orf	U2OS	48	KCNN4		false		ccsbBroad304_00902	KCNN4_orf
+BR00117022__P02	ccsbBroad304_14720	orf	U2OS	48	NTRK1		false		ccsbBroad304_14720	NTRK1_orf

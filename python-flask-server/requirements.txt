@@ -1,0 +1,8 @@
+streamlit>=1.40
+duckdb>=1.1
+pandas>=2.2
+pyarrow>=16
+numpy>=1.26
+scipy>=1.13
+scikit-learn>=1.5
+streamlit-agraph>=0.0.45

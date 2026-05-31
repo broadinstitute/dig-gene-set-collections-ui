@@ -1,0 +1,188 @@
+version: 0.1
+prototype_name: cfde_reveal_v1_local
+notes:
+  - "Catalog for the ui_test prototype only."
+  - "The first corpus is intentionally small and RNA-focused."
+  - "All three initial sources are public and usable without new credentials."
+
+sources:
+  - source_id: gtex
+    canonical_name: GTEx
+    source_type: portal_api
+    public_landing_page: "https://commonfund.nih.gov/GTEx"
+    documentation_page: "https://gtexportal.org/api/v2/docs"
+    dataset_id: gtex_v8
+    access_method:
+      type: api
+      description: "Use GTEx Portal V2 API endpoints for tissue metadata and expression summaries."
+      endpoints:
+        tissue_metadata: "https://gtexportal.org/api/v2/dataset/tissueSiteDetail?datasetId=gtex_v8"
+        top_expressed_gene: "https://gtexportal.org/api/v2/expression/topExpressedGene"
+        median_gene_expression: "https://gtexportal.org/api/v2/expression/medianGeneExpression"
+    modality: transcriptomics
+    organism: human
+    comparison_space_organism: human
+    likely_extractor_path: rna_deg
+    likely_provenance_overlay_fields:
+      - resource_name
+      - dataset_unit_title
+      - dataset_unit_type
+      - landing_page
+      - access_route
+      - publication_ids
+      - tissue_or_system
+      - contrast_label
+      - focus_node
+    friction_notes:
+      - "API access is straightforward, but tissue-specific signatures must be synthesized from expression summaries instead of downloaded as ready-made DE tables."
+      - "Median expression endpoints are paginated and slower than local files, so caching is required."
+    candidate_units:
+      - tissue_id: Muscle_Skeletal
+        title: "GTEx V8 Muscle - Skeletal tissue-specific expression"
+      - tissue_id: Liver
+        title: "GTEx V8 Liver tissue-specific expression"
+      - tissue_id: Whole_Blood
+        title: "GTEx V8 Whole Blood tissue-specific expression"
+      - tissue_id: Lung
+        title: "GTEx V8 Lung tissue-specific expression"
+      - tissue_id: Pancreas
+        title: "GTEx V8 Pancreas tissue-specific expression"
+      - tissue_id: Heart_Left_Ventricle
+        title: "GTEx V8 Heart - Left Ventricle tissue-specific expression"
+    selected_demo_units:
+      - card_id: GTEx_V8__Muscle_Skeletal__tissue_specific_expression
+        tissue_id: Muscle_Skeletal
+      - card_id: GTEx_V8__Liver__tissue_specific_expression
+        tissue_id: Liver
+      - card_id: GTEx_V8__Whole_Blood__tissue_specific_expression
+        tissue_id: Whole_Blood
+      - card_id: GTEx_V8__Lung__tissue_specific_expression
+        tissue_id: Lung
+      - card_id: GTEx_V8__Pancreas__tissue_specific_expression
+        tissue_id: Pancreas
+      - card_id: GTEx_V8__Heart_Left_Ventricle__tissue_specific_expression
+        tissue_id: Heart_Left_Ventricle
+
+  - source_id: motrpac
+    canonical_name: MoTrPAC
+    source_type: github_data_package
+    public_landing_page: "https://motrpac-data.org/"
+    documentation_page: "https://motrpac.github.io/MotrpacRatTraining6moData/"
+    repository: "https://github.com/MoTrPAC/MotrpacRatTraining6moData"
+    access_method:
+      type: public_rda_package
+      description: "Use transcriptomics differential analysis .rda objects from the public MoTrPAC rat training data package on GitHub."
+      object_index: "https://api.github.com/repos/MoTrPAC/MotrpacRatTraining6moData/contents/data"
+      raw_template: "https://raw.githubusercontent.com/MoTrPAC/MotrpacRatTraining6moData/main/data/{object_name}"
+    modality: transcriptomics
+    organism: rat
+    comparison_space_organism: human
+    likely_extractor_path: rna_deg
+    likely_provenance_overlay_fields:
+      - resource_name
+      - dataset_unit_title
+      - dataset_unit_type
+      - landing_page
+      - access_route
+      - publication_ids
+      - tissue_or_system
+      - contrast_label
+      - native_organism
+      - comparison_space_organism
+      - ortholog_mapping_method
+      - focus_node
+    friction_notes:
+      - "The public package is easy to access, but differential tables are stored as R data objects and must be normalized into plain TSV before extraction."
+      - "Native rat identifiers need explicit human comparison-space mapping in overlay provenance."
+      - "Comparison groups are timepoint-specific rather than a single generic trained_vs_control label."
+    candidate_units:
+      - object_name: TRNSCRPT_SKMGN_DA.rda
+        title: "MoTrPAC gastrocnemius skeletal muscle RNA differential analysis"
+      - object_name: TRNSCRPT_LIVER_DA.rda
+        title: "MoTrPAC liver RNA differential analysis"
+      - object_name: TRNSCRPT_HEART_DA.rda
+        title: "MoTrPAC heart RNA differential analysis"
+      - object_name: TRNSCRPT_BLOOD_DA.rda
+        title: "MoTrPAC blood RNA differential analysis"
+    selected_demo_units:
+      - card_id: MoTrPAC__SKMGN__RNA__male_8w_vs_control
+        object_name: TRNSCRPT_SKMGN_DA.rda
+        tissue_code: SKMGN
+        sex: male
+        comparison_group: 8w
+      - card_id: MoTrPAC__SKMGN__RNA__female_8w_vs_control
+        object_name: TRNSCRPT_SKMGN_DA.rda
+        tissue_code: SKMGN
+        sex: female
+        comparison_group: 8w
+      - card_id: MoTrPAC__LIVER__RNA__male_8w_vs_control
+        object_name: TRNSCRPT_LIVER_DA.rda
+        tissue_code: LIVER
+        sex: male
+        comparison_group: 8w
+      - card_id: MoTrPAC__LIVER__RNA__female_8w_vs_control
+        object_name: TRNSCRPT_LIVER_DA.rda
+        tissue_code: LIVER
+        sex: female
+        comparison_group: 8w
+      - card_id: MoTrPAC__HEART__RNA__male_8w_vs_control
+        object_name: TRNSCRPT_HEART_DA.rda
+        tissue_code: HEART
+        sex: male
+        comparison_group: 8w
+      - card_id: MoTrPAC__HEART__RNA__female_8w_vs_control
+        object_name: TRNSCRPT_HEART_DA.rda
+        tissue_code: HEART
+        sex: female
+        comparison_group: 8w
+
+  - source_id: geo
+    canonical_name: GEO
+    source_type: series_ftp
+    public_landing_page: "https://www.ncbi.nlm.nih.gov/geo/"
+    documentation_page: "https://www.ncbi.nlm.nih.gov/geo/info/download.html"
+    access_method:
+      type: ftp_plus_existing_workflow
+      description: "Use the existing Kang IFN-beta GEO workflow already present in this workspace to standardize cell-type contrasts into a long DE table."
+      series_page: "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE96583"
+      supplementary_dir: "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE96nnn/GSE96583/suppl/"
+      local_input_long_tsv: "rna_seq_gene_extractor/results/kang/kang_ifnb_markers_long.tsv"
+    modality: transcriptomics
+    organism: human
+    comparison_space_organism: human
+    likely_extractor_path: rna_deg_multi
+    likely_provenance_overlay_fields:
+      - resource_name
+      - dataset_unit_title
+      - dataset_unit_type
+      - landing_page
+      - access_route
+      - publication_ids
+      - tissue_or_system
+      - contrast_label
+      - focus_node
+    friction_notes:
+      - "The series is single-cell rather than bulk, so card wording must be explicit about PBMC cell-type-resolved contrasts."
+      - "The existing local workflow already produces the grouped long DE table needed by rna_deg_multi."
+    candidate_units:
+      - comparison_id: B_cells_stim_vs_ctrl
+      - comparison_id: CD14_Monocytes_stim_vs_ctrl
+      - comparison_id: CD4_T_cells_stim_vs_ctrl
+      - comparison_id: CD8_T_cells_stim_vs_ctrl
+      - comparison_id: Dendritic_cells_stim_vs_ctrl
+      - comparison_id: FCGR3A_Monocytes_stim_vs_ctrl
+      - comparison_id: NK_cells_stim_vs_ctrl
+      - comparison_id: Megakaryocytes_stim_vs_ctrl
+    selected_demo_units:
+      - card_id: GEO_GSE96583__B_cells__ifnb_stim_vs_ctrl
+        comparison_id: B_cells_stim_vs_ctrl
+      - card_id: GEO_GSE96583__CD14_Monocytes__ifnb_stim_vs_ctrl
+        comparison_id: CD14_Monocytes_stim_vs_ctrl
+      - card_id: GEO_GSE96583__CD4_T_cells__ifnb_stim_vs_ctrl
+        comparison_id: CD4_T_cells_stim_vs_ctrl
+      - card_id: GEO_GSE96583__CD8_T_cells__ifnb_stim_vs_ctrl
+        comparison_id: CD8_T_cells_stim_vs_ctrl
+      - card_id: GEO_GSE96583__Dendritic_cells__ifnb_stim_vs_ctrl
+        comparison_id: Dendritic_cells_stim_vs_ctrl
+      - card_id: GEO_GSE96583__FCGR3A_Monocytes__ifnb_stim_vs_ctrl
+        comparison_id: FCGR3A_Monocytes_stim_vs_ctrl

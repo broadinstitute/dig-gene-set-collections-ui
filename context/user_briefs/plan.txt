@@ -1,0 +1,448 @@
+## Agent brief for CFDE-REVEAL v1.0 prototype
+
+### Background
+
+You are building a **local prototype of CFDE-REVEAL v1.0**.
+
+REVEAL 1.0 is **not** a gene-set library and **not** an enrichment portal.
+It is a **dataset discovery and reuse prototype**.
+
+The user will upload or paste a gene list.
+The system will return **ranked dataset cards** explaining:
+
+* why the dataset may help
+* what biological signal is shared
+* what is complementary about the dataset
+* how to access or reuse it
+* how the signature was derived
+
+Gene sets are **evidence objects**, not the product.
+
+### Prototype mission statement
+
+Use this on the local landing page:
+
+**Discover scientifically related datasets across NIH Common Fund programs and beyond.**
+**Upload a gene list to find reusable datasets and why they matter.**
+
+### Hard constraints
+
+* Build a **local-only** working prototype.
+* Use the provided `flannick/dig-gene-set-extractors` repository as the extraction engine.
+* Include **GTEx** and **MoTrPAC**.
+* Use **GEO** as the default third source.
+* Do **not** build a standalone GMT browser or a bulk gene-set portal.
+* Do **not** make enrichment tables the main UI.
+* Use **ASCII only** in generated code.
+* Prefer official files, packages, and APIs over browser automation of JS-heavy portals. GTEx exposes open expression downloads through its portal; MoTrPAC exposes a Data Hub plus public processed-analysis resources and code; GEO supports direct download/programmatic access. ([NIH Common Fund][3])
+
+### Resource choice
+
+Use this default set unless blocked:
+
+* **GTEx**
+  Use open aggregated expression files from GTEx.
+  Build tissue-specific signatures, for example tissue-versus-rest signatures.
+  Do not touch controlled-access genotype or BAM data. ([NIH Common Fund][3])
+
+* **MoTrPAC**
+  Preferred path: official public processed outputs referenced by the flagship paper and program resources.
+  Fallback path: the public `motrpac_public_data_analysis` repo if it is faster to stand up.
+  Start with transcriptomics. Add one proteomics slice only if it is straightforward. ([Nature][4])
+
+* **GEO**
+  Choose 2 to 4 human studies with clear case/control or perturbation contrasts and publicly downloadable matrices/metadata.
+  Keep the study set small and clean. ([NCBI][5])
+
+Optional swap:
+
+* **HuBMAP** can replace GEO only if the agent confirms it can fetch enough processed data without new credentials. HuBMAP has APIs and curated collections, but its public docs say processed portal downloads require login. ([HuBMAP][6])
+
+### Retrieval unit
+
+Do not index entire resources as a single item.
+
+Index **dataset units**:
+
+* GTEx: tissue-specific signature unit
+* MoTrPAC: tissue x assay x contrast unit
+* GEO: study x contrast unit
+
+Each indexed unit must have:
+
+* `card_id`
+* `resource_name`
+* `dataset_unit_title`
+* `dataset_unit_type`
+* `organism`
+* `comparison_space_organism`
+* `modality`
+* `tissue_or_system`
+* `contrast_label`
+* `landing_page`
+* `access_route`
+* `publication_ids`
+* `signature_path`
+* `meta_path`
+* `provenance_path`
+
+### Cross-species rule
+
+GTEx is human and MoTrPAC includes rat data.
+For cross-resource retrieval:
+
+* keep native gene identifiers in provenance
+* build a comparison-space signature using human orthologs when needed
+* store both
+* show this explicitly in the UI:
+
+  * `native organism`
+  * `comparison space`
+  * `ortholog mapping method`
+
+To keep the first demo simple, prefer human GEO studies.
+
+---
+
+## Work plan
+
+### Step 1: repo reconnaissance
+
+Inspect the extractor repo and write a one-page summary for yourself:
+
+* available extractor families
+* workflows you will use
+* output contract
+* provenance overlay support
+* any Harmonizome-labeled modes
+
+Use existing functionality first.
+Do not rewrite extraction logic before you have one successful end-to-end run.
+
+Important note: the RNA docs already expose a workflow-side Harmonizome mode and an extractor-side Harmonizome post-processing mode. Treat those as **baseline/comparison settings**, not the default REVEAL extraction path. ([GitHub][7])
+
+### Step 2: resource reconnaissance
+
+Create `prototype/resource_catalog.yaml`.
+
+For each source, capture:
+
+* canonical name
+* source type
+* public landing page
+* download/access method
+* candidate units
+* modality
+* organism
+* likely extractor path
+* likely provenance overlay fields
+* friction notes
+
+Decision rule:
+
+* if a source needs browser scraping but also has an official package or download endpoint, use the official package/download path
+
+### Step 3: pick the first demo corpus
+
+Target **12 to 20 cards total**.
+
+Suggested split:
+
+* GTEx: 5 to 7 tissue cards
+* MoTrPAC: 4 to 6 contrast cards
+* GEO: 3 to 6 contrast cards
+
+Keep only dataset units that satisfy all of:
+
+* stable landing page
+* clear biological label
+* clear assay/modality
+* signature can be generated
+* provenance can name source files and extraction method
+
+### Step 4: extraction
+
+Build a thin slice first.
+
+#### GTEx
+
+Use RNA only.
+Create tissue-specific signatures from open GTEx expression data.
+
+Suggested output unit naming:
+
+* `GTEx_V8__Skeletal_Muscle__tissue_specific_expression`
+* `GTEx_V8__Liver__tissue_specific_expression`
+
+#### MoTrPAC
+
+Start RNA only.
+Use the cleanest public processed contrast path.
+
+Suggested output unit naming:
+
+* `MoTrPAC__Skeletal_Muscle__RNA__trained_vs_control`
+* `MoTrPAC__Liver__RNA__trained_vs_control`
+
+Stretch goal:
+
+* one proteomics card if the public path is clean and the extractor run is reproducible
+
+#### GEO
+
+Pick a small set of clean human studies.
+Standardize each selected study into one or more contrast-level RNA signatures.
+
+Suggested naming:
+
+* `GEO_GSEXXXXX__whole_blood__disease_vs_control`
+
+For every run:
+
+* emit the standard extractor outputs
+* generate a provenance overlay JSON
+* write a normalized card manifest row
+
+### Step 5: provenance audit
+
+Audit whether `geneset.provenance.json` plus the overlay is enough to drive the UI.
+
+The UI must be able to recover these fields **without ad hoc hand-editing**:
+
+* resource name
+* dataset unit title
+* landing page
+* modality
+* organism
+* tissue/system
+* contrast label
+* source files and hashes
+* extractor name and version
+* command and parameters
+* publication or release identifiers
+* focus node for the emitted signature
+
+If yes:
+
+* do not patch the repo
+* document the overlay convention you used
+
+If no:
+
+* patch `dig-gene-set-extractors` in a backward-compatible way
+
+### Step 6: patch policy if provenance is inadequate
+
+Patch only the minimum needed.
+
+Preferred additions:
+
+* first-class `source_resource` node
+* first-class `source_dataset_unit` node
+* optional `publication` node
+* optional `release` node
+* explicit edge from emitted gene set to dataset unit
+* explicit `comparison_label`
+* explicit `landing_page`
+* explicit `access_route`
+* explicit `organism` and `comparison_space_organism`
+
+Patch rules:
+
+* keep current output filenames unchanged
+* preserve old readers if possible
+* add one test fixture
+* add one doc note
+* create a git patch or branch with a short PR summary
+
+### Step 7: local retrieval index
+
+Build a small local index in DuckDB or SQLite.
+
+Store:
+
+* card manifest
+* signature table
+* provenance pointer table
+* optional precomputed embedding table
+
+Scoring for uploaded gene lists:
+
+1. overlap-based score
+2. enrichment-style score
+3. latent signature similarity score
+
+Recommended implementation:
+
+* normalize genes
+* compute weighted overlap / weighted Jaccard
+* compute hypergeometric-style significance or equivalent enrichment evidence
+* build a sparse gene-by-card matrix
+* compute a low-dimensional latent representation, for example TF-IDF plus TruncatedSVD
+* combine scores into a final rank
+
+Important messaging:
+
+* label the latent score **"latent signature similarity (prototype)"**
+* do **not** call it mechanome in this prototype unless there is a real curated coordinate system behind it
+
+### Step 8: UI
+
+Build the UI in **Streamlit**.
+
+The app should have four areas.
+
+#### A. Landing / input
+
+* title and subtitle
+* paste gene list
+* upload text file
+* optional species selector
+* filters: resource, modality, tissue/system, access level
+
+#### B. Ranked results
+
+Return **cards**, not tables, by default.
+
+Each card should show:
+
+**Title**
+Dataset unit title
+
+**Why this dataset may help**
+One sentence in scientist language
+
+**Shared biological signal**
+Top overlapping signal categories
+
+**What is complementary here**
+Different tissue, assay, perturbation, cohort, or resolution
+
+**Evidence supporting the match**
+This is where overlap/enrichment/latent similarity live
+
+**How to reuse it**
+Landing page, access route, public/controlled, resource name
+
+**Provenance**
+Expandable graph and plain-English extraction summary
+
+#### C. Evidence drawer
+
+This can include:
+
+* overlap score
+* enrichment-like score
+* latent similarity score
+* overlapping genes
+* downloadable signature TSV
+* downloadable provenance JSON
+
+#### D. Provenance viewer
+
+Use a compact graph plus a readable summary:
+
+* source resource
+* dataset unit
+* files
+* extraction operation
+* emitted signature
+
+### Step 9: UI language rules
+
+Avoid this language at the top level:
+
+* enrichment hit
+* gene set match
+* overlap result
+
+Prefer:
+
+* relevant dataset
+* evidence-backed recommendation
+* shared biological signal
+* complementary dataset
+* reuse rationale
+
+Also:
+
+* do not generate speculative free-text LLM paragraphs to explain overlap
+* use structured template-based rationale from metadata and evidence
+
+That matters because Harmonizome 3.0 already uses LLM text to speculate about overlap explanations; REVEAL should look more grounded and provenance-aware. ([OUP Academic][2])
+
+### Step 10: what not to build
+
+Do not build:
+
+* a bulk GMT download portal
+* a global UMAP landing page
+* natural-language query in v1.0
+* a chatbot
+* full CFDE crawling
+* ontology-heavy browse pages
+
+Per-card downloads are fine:
+
+* signature TSV
+* provenance JSON
+* card JSON
+
+### Step 11: validation
+
+Before declaring success, run 3 simple smoke tests.
+
+Suggested tests:
+
+* a muscle-related gene list should surface GTEx muscle and at least one relevant MoTrPAC muscle card
+* an immune/inflammation list should surface at least one blood/immune-relevant card
+* a mitochondrial/oxidative phosphorylation list should surface at least two biologically plausible cards from different resources
+
+Also verify:
+
+* every card opens a landing page
+* every card has a provenance JSON
+* every result explanation mentions reuse value, not just overlap
+* local app starts in one command
+
+---
+
+## Deliverables
+
+Produce these artifacts:
+
+* `prototype/README.md`
+* `prototype/resource_catalog.yaml`
+* `prototype/card_manifest.parquet`
+* `prototype/signature_index.parquet`
+* `prototype/signatures/`
+* `prototype/app/`
+* `prototype/eval/`
+* `prototype/screenshots/`
+
+If a repo patch is needed:
+
+* `prototype/patches/dig_gse_provenance.patch`
+* short PR summary markdown
+
+### Acceptance criteria
+
+The prototype is successful when all of the following are true:
+
+* uses 3 sources, including GTEx and MoTrPAC
+* returns at least 12 working cards
+* supports pasted/uploaded gene lists
+* exposes per-card evidence and provenance
+* keeps dataset recommendations as the primary UI
+* does not present itself as a generic enrichment portal
+* can be run locally from a fresh environment with documented steps
+
+My strongest recommendation is to have the agent start with **GTEx + MoTrPAC + GEO, RNA-only, 12 to 20 cards, Streamlit UI, overlay-first provenance**, and only then decide whether a provenance patch or HuBMAP swap is worth it. That is the shortest path to a convincing REVEAL 1.0 demo that clearly differs from Harmonizome while still acknowledging signature evidence as the foundation.
+
+[1]: https://github.com/flannick/dig-gene-set-extractors/blob/main/docs/geneset-extractors.md "dig-gene-set-extractors/docs/geneset-extractors.md at main · flannick/dig-gene-set-extractors · GitHub"
+[2]: https://academic.oup.com/nar/article/53/D1/D1016/7905315?utm_source=chatgpt.com "Harmonizome 3.0: integrated knowledge about genes and ..."
+[3]: https://commonfund.nih.gov/GTEx "Genotype-Tissue Expression (GTEx) | NIH Common Fund"
+[4]: https://www.nature.com/articles/s41586-023-06877-w "Temporal dynamics of the multi-omic response to endurance exercise training | Nature"
+[5]: https://www.ncbi.nlm.nih.gov/geo/info/download.html?utm_source=chatgpt.com "Download GEO data - NCBI"
+[6]: https://docs.hubmapconsortium.org/apis.html?utm_source=chatgpt.com "HuBMAP APIs"
+[7]: https://github.com/flannick/dig-gene-set-extractors/blob/main/docs/assays/rnaseq/guide.md?utm_source=chatgpt.com "dig-gene-set-extractors/docs/assays/rnaseq/guide.md at main · flannick/dig-gene-set-extractors · GitHub"

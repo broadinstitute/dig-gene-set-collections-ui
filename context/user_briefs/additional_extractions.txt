@@ -1,0 +1,422 @@
+You are preparing extraction-ready, provenance-rich gene sets for CFDE-REVEAL using the flannick/dig-gene-set-extractors repository.
+
+Overall goals:
+- Generate at least one real run per currently supported modality family.
+- Generate at least one run for every CFDE DCC that currently has a realistic path to extraction with the existing repo.
+- Keep outputs in the shared repo contract:
+  - geneset.tsv
+  - geneset.meta.json
+  - geneset.provenance.json
+  - manifest.tsv for grouped outputs
+- Always supply a provenance overlay JSON with:
+  - source_resource
+  - source_dataset_unit
+  - landing_page
+  - access_route
+  - publication_ids if available
+  - organism
+  - comparison_space_organism if orthologized
+  - extractor notes
+
+Global rules:
+1. Read the repo docs first and use the documented CLI/workflow for each extractor family.
+2. Prefer official public portals, release pages, APIs, or repos over ad hoc mirrors.
+3. For each section below, create a folder:
+   prototype_inputs/<dataset_slug>/
+4. Save:
+   - downloaded raw or processed source files
+   - a short README.md describing exactly what was downloaded
+   - provenance_overlay.json
+   - any staged intermediate files needed by the extractor
+5. Normalize gene identifiers to what the target extractor expects.
+6. Do not invent metadata fields outside the repo contract.
+7. After every run, validate the output with the repo validator.
+8. Keep a run log:
+   prototype_runs/run_log.tsv
+   with dataset_slug, extractor, status, output_path, notes.
+
+Priority order:
+- First finish the matrix-backed CFDE DCC runs:
+  GTEx, MoTrPAC, HuBMAP, SPARC, Bridge2AI, SenNet, 4DN.
+- Then finish the modality-only public runs:
+  splicing, methylation, CNV, drug response, morphology, calorimetry, ChIP-seq.
+- Reuse the same dataset for multiple extractors when appropriate, but emit separate outputs.
+
+Section 1: GTEx open-access tissue expression
+Coverage:
+- DCC: GTEx
+- Modality: bulk RNA
+- Confidence: high
+
+Why this dataset:
+- Use the current GTEx open-access expression matrix plus sample annotations from the GTEx datasets page.
+- Build tissue-versus-rest or tissue-versus-tissue contrasts.
+
+Where to get it:
+- https://www.gtexportal.org/home/datasets
+
+What to do:
+1. Download the latest open-access bulk expression matrix and sample annotations.
+2. Choose 5-10 canonical tissues with strong biological distinction, for example:
+   skeletal muscle, liver, whole blood, brain cortex, heart left ventricle.
+3. Build a design/contrast table for tissue-vs-rest or selected tissue pairs.
+4. Use the documented RNA preparation workflow if needed, then run rna_deg_multi.
+5. Emit one grouped output directory per contrast.
+6. In provenance_overlay.json, set:
+   - source_resource: GTEx
+   - source_dataset_unit: GTEx open-access bulk tissue expression
+   - landing_page: https://www.gtexportal.org/home/datasets
+   - access_route: public portal download
+
+Deliverables:
+- prototype_outputs/gtex_bulk_rna/
+- grouped manifest with enriched columns
+
+Section 2: MoTrPAC public multi-omics differential tables
+Coverage:
+- DCC: MoTrPAC
+- Modalities: proteomics, PTM
+- Confidence: high
+
+Why this dataset:
+- Use a public MoTrPAC differential analysis release with proteomics and phosphoproteomics.
+- Prefer the rat training 6 month WAT public analysis repo if it gives the cleanest first run.
+
+Where to get it:
+- https://motrpac-data.org/
+- https://github.com/MoTrPAC/MotrpacRatTraining6moWATData
+
+What to do:
+1. Inspect the public analysis repo and identify:
+   - one gene-level proteomics differential table
+   - one phosphosite-level differential table or matrix
+2. Run proteomics_diff on the proteomics differential table.
+3. Run ptm_site_diff or ptm_site_matrix on the phosphosite file, whichever fits the available file shape.
+4. Prefer one clean tissue/contrast first, for example trained vs control in WAT or skeletal muscle.
+5. Emit separate outputs:
+   - prototype_outputs/motrpac_proteomics_diff/
+   - prototype_outputs/motrpac_ptm/
+6. In provenance_overlay.json, record:
+   - source_resource: MoTrPAC
+   - source_dataset_unit: exact tissue/assay/contrast used
+   - landing_page: the exact Data Hub or GitHub landing page used
+   - access_route: public data hub or public GitHub analysis repo
+
+Section 3: HuBMAP public processed single-cell dataset
+Coverage:
+- DCC: HuBMAP
+- Modality: single-cell RNA
+- Confidence: medium
+
+Why this dataset:
+- HuBMAP has public portal access, APIs, and public dataset pages that expose metadata and processed data.
+- Use one released human scRNA or snRNA dataset with a processed h5ad file.
+
+Where to get it:
+- https://portal.hubmapconsortium.org/
+- https://docs.hubmapconsortium.org/apis.html
+
+What to do:
+1. Use the portal or API to find one released human scRNA/snRNA dataset with a processed h5ad.
+2. Download:
+   - the h5ad or equivalent processed matrix
+   - the linked metadata file
+3. If clusters/cell types are already annotated, use them.
+4. Run sc_rna_marker to generate cluster or cell-type marker gene sets.
+5. If the processed object needs minor harmonization first, script that in a staging notebook and save it under prototype_inputs/hubmap_scrna/staging/.
+6. In provenance_overlay.json, capture the exact HuBMAP dataset UUID and landing page.
+
+Deliverables:
+- prototype_outputs/hubmap_scrna_markers/
+
+Section 4: SPARC public single-cell transcriptomics dataset
+Coverage:
+- DCC: SPARC
+- Modality: single-cell RNA
+- Confidence: medium
+
+Why this dataset:
+- SPARC exposes public datasets on an open portal, including transcriptomic datasets.
+- Prefer a dataset that is already clearly presented as single-cell RNA-seq.
+
+Where to get it:
+- https://sparc.science/
+- Prefer the public dataset page for:
+  SPARC dataset 160
+  or, if the file organization is cleaner, another public scRNA dataset on SPARC.
+
+What to do:
+1. Download one public SPARC scRNA dataset with counts and cell metadata.
+2. Convert to the input shape required by sc_rna_marker.
+3. Run sc_rna_marker to create cluster/cell-type marker sets.
+4. Save exact dataset DOI or accession in provenance_overlay.json.
+
+Deliverables:
+- prototype_outputs/sparc_scrna_markers/
+
+Section 5: Bridge2AI CM4AI public Perturb-seq release
+Coverage:
+- DCC: Bridge2AI
+- Modality: single-cell RNA / Perturb-seq
+- Confidence: medium
+
+Why this dataset:
+- CM4AI public releases explicitly include Perturb-seq data and public release documentation.
+- Use one clean released dataset, ideally:
+  - MDA-MB-468 +/- treatment Perturb-seq
+  or
+  - KOLF2.1J iPSC Perturb-seq
+
+Where to get it:
+- https://bridge2ai.org/datasets
+- https://cm4ai.org/data-releases/
+- https://cm4ai.org/product-documentation/
+
+What to do:
+1. Identify one public CM4AI release with downloadable Perturb-seq processed outputs or matrices.
+2. Download:
+   - expression matrix
+   - cell metadata
+   - perturbation metadata
+3. Build one or more biologically clear contrasts:
+   - perturbation target vs control
+   - treatment vs untreated
+4. If cluster-aware marker extraction is better than direct contrasts, use sc_rna_marker.
+5. Otherwise use the RNA pipeline that best matches the processed matrices.
+6. In provenance_overlay.json, include:
+   - source_resource: Bridge2AI / CM4AI
+   - source_dataset_unit: exact release + cell model + treatment
+   - landing_page: exact data release page
+
+Deliverables:
+- prototype_outputs/bridge2ai_cm4ai_perturbseq/
+
+Section 6: SenNet public portal dataset
+Coverage:
+- DCC: SenNet
+- Modality: single-cell RNA or single-cell ATAC
+- Confidence: medium-low
+
+Why this dataset:
+- SenNet has a public data portal and public raw/processed download paths.
+- Use the cleanest released processed dataset you can download directly.
+
+Where to get it:
+- https://data.sennetconsortium.org/
+
+What to do:
+1. Search the public SenNet portal for one released dataset with either:
+   - processed h5ad for scRNA/snRNA, preferred
+   - processed ATAC peaks or matrix for snATAC, fallback
+2. If scRNA is available:
+   - run sc_rna_marker
+3. If only ATAC is cleanly available:
+   - run atac_bulk or atac_sc_10x depending on the file shape
+4. Record the exact SenNet dataset identifier in provenance_overlay.json.
+5. Keep this section narrow: one successful SenNet run is sufficient.
+
+Deliverables:
+- prototype_outputs/sennet_one_public_run/
+
+Section 7: 4DN released ATAC-seq peaks
+Coverage:
+- DCC: 4DN
+- Modality: ATAC
+- Confidence: high
+
+Why this dataset:
+- 4DN exposes programmatic access and released processed files.
+- Use a released processed ATAC peak file.
+
+Where to get it:
+- https://data.4dnucleome.org/
+- Prefer the released processed file page:
+  https://data.4dnucleome.org/files-processed/4DNFIUALWN8X/
+
+What to do:
+1. Download the processed ATAC peak file or zip package.
+2. Extract the peak BED/narrowPeak file.
+3. Obtain the required genome annotation/GTF and any bundle resources the ATAC extractor needs.
+4. Run atac_bulk.
+5. Use a descriptive output slug containing the 4DN accession.
+6. Record experiment and file accession in provenance_overlay.json.
+
+Deliverables:
+- prototype_outputs/4dn_atac_bulk/
+
+Section 8: 4DN released ChIP-seq peak file
+Coverage:
+- DCC: optional 4DN second run
+- Modality: ChIP-seq
+- Confidence: medium
+
+Why this dataset:
+- 4DN hosts released ChIP-seq data and processed peak files.
+- This is the cleanest CFDE-adjacent way to cover the current chipseq_peak extractor.
+
+Where to get it:
+- https://data.4dnucleome.org/
+
+What to do:
+1. Use the 4DN portal search to find one released human ChIP-seq processed peak file, preferably a common factor or mark like CTCF or H3K27ac.
+2. Download the peak file and matching genome annotation.
+3. Run chipseq_peak.
+4. Save the exact accession and file URL in provenance_overlay.json.
+
+Deliverables:
+- prototype_outputs/4dn_chipseq_peak/
+
+Section 9: TCGA SpliceSeq public PSI matrix
+Coverage:
+- DCC: none
+- Modality: splicing
+- Confidence: high
+
+Why this dataset:
+- TCGA SpliceSeq provides public PSI downloads and is a clean, high-profile splicing source.
+
+Where to get it:
+- https://bioinformatics.mdanderson.org/TCGASpliceSeq/PSIdownload.jsp
+
+What to do:
+1. Download one cancer cohort PSI matrix, preferably TCGA-BRCA.
+2. Build a simple contrast file, for example tumor vs normal or a clinically meaningful subtype split if metadata are straightforward.
+3. Run splice_event_matrix if using a matrix-wide workflow, or splice_event_diff if you generate a contrast-level event table.
+4. Save sample metadata source in provenance_overlay.json.
+
+Deliverables:
+- prototype_outputs/tcga_spliceseq_brca/
+
+Section 10: TCGA-BRCA DNA methylation
+Coverage:
+- DCC: none
+- Modality: methylation
+- Confidence: medium-high
+
+Why this dataset:
+- GDC exposes public TCGA-BRCA project pages and the cohort has standard methylation data.
+
+Where to get it:
+- https://portal.gdc.cancer.gov/projects/TCGA-BRCA
+
+What to do:
+1. From the BRCA project, obtain one public methylation table or matrix that can be staged into the input shape expected by methylation_cpg_diff.
+2. Build a minimal contrast:
+   - tumor vs normal if available
+   - or one subtype contrast with enough samples
+3. Run methylation_cpg_diff.
+4. If a region-level staged file is easier, use methylation_dmr_regions instead.
+5. Record the exact GDC file UUIDs used.
+
+Deliverables:
+- prototype_outputs/tcga_brca_methylation/
+
+Section 11: TCGA-BRCA copy-number segments
+Coverage:
+- DCC: none
+- Modality: CNV
+- Confidence: medium-high
+
+Why this dataset:
+- GDC exposes public copy-number data for TCGA-BRCA, which is a straightforward fit for the CNV extractor.
+
+Where to get it:
+- https://portal.gdc.cancer.gov/projects/TCGA-BRCA
+
+What to do:
+1. Obtain one public copy-number segment file set for TCGA-BRCA.
+2. Download the matching gene annotation/GTF required by cnv_gene_extractor.
+3. If purity or ploidy input is optional, document whether you used it.
+4. Run cnv_gene_extractor.
+5. Save the GDC file UUIDs and exact project name in provenance_overlay.json.
+
+Deliverables:
+- prototype_outputs/tcga_brca_cnv/
+
+Section 12: DepMap PRISM public drug-response data
+Coverage:
+- DCC: none
+- Modality: drug response
+- Confidence: high
+
+Why this dataset:
+- PRISM/DepMap is the clearest public, high-profile drug-response screen source.
+
+Where to get it:
+- https://depmap.org/portal/data_page/?tab=allData
+
+What to do:
+1. Download the current PRISM drug-response matrix and the associated cell-line and compound metadata.
+2. Use the repo's documented drug-response workflow assumptions.
+3. Run drug_response_screen on one narrow slice first:
+   - a small set of compounds
+   - or a single well-annotated cancer lineage
+4. Record dataset version and release date in provenance_overlay.json.
+
+Deliverables:
+- prototype_outputs/depmap_prism/
+
+Section 13: JUMP Cell Painting public morphology data
+Coverage:
+- DCC: none
+- Modality: morphology
+- Confidence: high
+
+Why this dataset:
+- JUMP Cell Painting is a flagship public morphology resource with public data access.
+
+Where to get it:
+- https://broadinstitute.github.io/cellpainting-gallery/overview.html
+- https://broadinstitute.github.io/cellpainting-gallery/download_instructions.html
+
+What to do:
+1. Download one public JUMP Cell Painting profile dataset with:
+   - feature matrix
+   - perturbation metadata
+   - plate/sample metadata
+2. Use the morphology_profile_query extractor in the mode that best matches the downloaded profile tables.
+3. If a reference bundle is required, fetch it using the repo's recommended bundle path.
+4. Record the exact Cell Painting Gallery collection used.
+
+Deliverables:
+- prototype_outputs/jump_morphology/
+
+Section 14: Public CalR example study
+Coverage:
+- DCC: none
+- Modality: calorimetry
+- Confidence: medium
+
+Why this dataset:
+- The repo docs already point to a public CalR-preparable study example, which is the fastest route to covering calorimetry.
+
+Where to get it:
+- Use the public-study example documented in the repo's calorimetry guide.
+- Use the FIG2_HFD example if it is still the cleanest path.
+
+What to do:
+1. Run the documented public-study preparation workflow exactly as in the repo docs.
+2. Then run calr_ontology_mapper to emit gene-set outputs.
+3. If profile-query mode is also easy, optionally run calr_profile_query as a second output.
+4. Save the exact study files used in prototype_inputs/calr_public_example/.
+
+Deliverables:
+- prototype_outputs/calr_public_example/
+
+End-state checks:
+- Every output validates.
+- Every output has geneset.provenance.json.
+- Every output has a short README with:
+  source, exact files, extractor used, notes.
+- Produce a final summary table:
+  prototype_runs/final_inventory.tsv
+  with columns:
+  dataset_slug
+  dcc
+  modality
+  extractor
+  output_path
+  source_url
+  public_or_controlled
+  success
+  notes
