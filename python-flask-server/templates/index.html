@@ -275,7 +275,7 @@
             <tr>
               <td>
                 {% if item.gene_set_id is not none %}
-                <a href="{{ url_for('gene_set_detail', gene_set_id=item.gene_set_id) }}">{{ item.name }}</a>
+                <a href="gene-sets/{{ item.gene_set_id }}">{{ item.name }}</a>
                 {% else %}
                 {{ item.name }}
                 {% endif %}
@@ -365,10 +365,10 @@
         </details>
 
         <div class="download-row">
-          <a href="{{ url_for('download', card_id=card.card_id, kind='signature') }}">Signature TSV</a>
-          <a href="{{ url_for('download', card_id=card.card_id, kind='overlay') }}">Overlay JSON</a>
-          <a href="{{ url_for('download', card_id=card.card_id, kind='graph') }}">Graph JSON</a>
-          <a href="{{ url_for('download', card_id=card.card_id, kind='card') }}">Card JSON</a>
+          <a href="download/{{ card.card_id }}/signature">Signature TSV</a>
+          <a href="download/{{ card.card_id }}/overlay">Overlay JSON</a>
+          <a href="download/{{ card.card_id }}/graph">Graph JSON</a>
+          <a href="download/{{ card.card_id }}/card">Card JSON</a>
         </div>
       </section>
       {% endfor %}
