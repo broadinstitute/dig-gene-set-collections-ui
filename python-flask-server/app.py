@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import os
 import sys
 from functools import lru_cache
@@ -134,41 +133,9 @@ def build_filter_options(gene_sets: list[dict[str, Any]]) -> tuple[list[str], li
 def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
     nodes = knowledge_graph.get("nodes", [])
     edges = knowledge_graph.get("edges", [])
-    width = 900
-    height = 520
-    cx = width / 2
-    cy = height / 2
-    radius = max(120, min(width, height) * 0.34)
-    count = max(len(nodes), 1)
-    positions: dict[str, tuple[float, float]] = {}
-
-    for idx, node in enumerate(nodes):
-        angle = (2 * math.pi * idx / count) - (math.pi / 2)
-        positions[str(node["id"])] = (
-            cx + radius * math.cos(angle),
-            cy + radius * math.sin(angle),
-        )
-
-    svg_edges: list[dict[str, Any]] = []
-    for edge in edges:
-        source = positions.get(str(edge.get("source")))
-        target = positions.get(str(edge.get("target")))
-        if not source or not target:
-            continue
-        svg_edges.append(
-            {
-                "x1": source[0],
-                "y1": source[1],
-                "x2": target[0],
-                "y2": target[1],
-                "label": str(edge.get("label", "")),
-            }
-        )
-
-    svg_nodes: list[dict[str, Any]] = []
+    vis_nodes: list[dict[str, Any]] = []
     for node in nodes:
         node_id = str(node["id"])
-        x, y = positions[node_id]
         node_type = str(node.get("type", "Node"))
         if node_type == "GeneSet":
             color = "#ff6600"
@@ -176,23 +143,62 @@ def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
             color = "#35669a"
         else:
             color = "#7c757d"
-        svg_nodes.append(
+        vis_nodes.append(
             {
                 "id": node_id,
                 "label": str(node.get("name") or node.get("label") or node_id),
                 "type": node_type,
-                "description": str(node.get("description", "")),
-                "x": x,
-                "y": y,
-                "color": color,
+                "title": str(node.get("description", "") or node_id),
+                "shape": "ellipse" if node_type == "GeneSet" else "box",
+                "color": {
+                    "background": color,
+                    "border": color,
+                    "highlight": {"background": color, "border": color},
+                },
+                "font": {"color": "#ffffff"},
+            }
+        )
+
+    vis_edges: list[dict[str, Any]] = []
+    for edge in edges:
+        vis_edges.append(
+            {
+                "from": str(edge.get("source")),
+                "to": str(edge.get("target")),
+                "label": str(edge.get("label", "")),
+                "title": str(edge.get("description", "") or edge.get("id", "")),
+                "arrows": "to",
+                "color": {"color": "#b3bcc5", "highlight": "#35669a"},
+                "font": {"align": "middle", "size": 11},
             }
         )
 
     return {
-        "width": width,
-        "height": height,
-        "nodes": svg_nodes,
-        "edges": svg_edges,
+        "nodes": vis_nodes,
+        "edges": vis_edges,
+        "options": {
+            "autoResize": True,
+            "height": "520px",
+            "layout": {
+                "improvedLayout": True,
+            },
+            "interaction": {
+                "hover": True,
+                "navigationButtons": True,
+            },
+            "physics": {
+                "enabled": True,
+                "stabilization": {"iterations": 150},
+            },
+            "edges": {
+                "smooth": {"type": "dynamic"},
+                "width": 2,
+            },
+            "nodes": {
+                "borderWidth": 1,
+                "margin": 10,
+            },
+        },
     }
 
 
