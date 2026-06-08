@@ -1,5 +1,17 @@
 
 
+
+20260601 - fix errors
+when I deploy the application behind an ngnix server, I can reach the home page at 
+https://translator.broadinstitute.org/genetics_provider/geneset_collections/
+but the link pages give an error link of format 
+https://translator.broadinstitute.org/gene-sets/144
+modify the code so that the links work both for local deployment and for behind 
+an ngnix server
+
+
+
+20260529 - adding page details
 add a html ref link to each entry in the gene set list that links to the gene set details 
 page, using the 
 /gene-set?gene_set_id=<gene_set_id> call to get return the data 
