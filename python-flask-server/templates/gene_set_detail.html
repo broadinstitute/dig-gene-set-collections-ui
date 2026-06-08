@@ -105,6 +105,16 @@
       color: #666;
       font-size: 0.95rem;
     }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.55rem;
+      border-bottom: 1px solid var(--portal-gray-200);
+      vertical-align: top;
+    }
     @media (max-width: 900px) {
       .meta-grid {
         grid-template-columns: 1fr;
@@ -132,7 +142,9 @@
         Detail source:
         <a href="{{ page.detail_url }}" target="_blank" rel="noreferrer">{{ page.detail_url }}</a><br>
         Provenance source:
-        <a href="{{ page.provenance_url }}" target="_blank" rel="noreferrer">{{ page.provenance_url }}</a>
+        <a href="{{ page.provenance_url }}" target="_blank" rel="noreferrer">{{ page.provenance_url }}</a><br>
+        Graph source:
+        <a href="{{ page.graph_url }}" target="_blank" rel="noreferrer">{{ page.graph_url }}</a>
       </p>
     </div>
 
@@ -161,6 +173,38 @@
       <div class="graph-wrap">
         <div id="knowledge-graph" role="img" aria-label="Knowledge graph"></div>
       </div>
+    </div>
+
+    <div class="panel">
+      <h2>Graph Table</h2>
+      {% if page.graph_rows %}
+      <table>
+        <thead>
+          <tr>
+            <th>Edge ID</th>
+            <th>Edge Name</th>
+            <th>Source</th>
+            <th>Source Type</th>
+            <th>Target</th>
+            <th>Target Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in page.graph_rows %}
+          <tr>
+            <td>{{ row.edge_id }}</td>
+            <td>{{ row.edge_name }}</td>
+            <td>{{ row.source_name }}</td>
+            <td>{{ row.source_type }}</td>
+            <td>{{ row.target_name }}</td>
+            <td>{{ row.target_type }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>No graph rows were returned by the remote endpoint.</p>
+      {% endif %}
     </div>
 
     <div class="panel meta-grid">

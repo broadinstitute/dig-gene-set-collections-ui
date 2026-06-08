@@ -28,6 +28,7 @@ GENESET_API_ROOT = os.getenv("GENESET_API_ROOT_ENV", DEFAULT_GENESET_API_ROOT).r
 GENESET_LIST_URL = f"{GENESET_API_ROOT}/gene-sets"
 GENESET_DETAIL_URL = f"{GENESET_API_ROOT}/gene-set"
 GENESET_PROVENANCE_URL = f"{GENESET_API_ROOT}/gene_set_provenance"
+GENESET_GRAPH_URL = f"{GENESET_API_ROOT}/gene_set_graph"
 
 
 @lru_cache(maxsize=1)
@@ -83,6 +84,14 @@ def load_gene_set_provenance(gene_set_id: int) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Unexpected provenance payload for gene_set_id={gene_set_id}")
     return payload
+
+
+@lru_cache(maxsize=512)
+def load_gene_set_graph(gene_set_id: int) -> list[dict[str, Any]]:
+    payload = fetch_remote_json(f"{GENESET_GRAPH_URL}?gene_set_id={gene_set_id}")
+    if not isinstance(payload, list):
+        raise ValueError(f"Unexpected graph table payload for gene_set_id={gene_set_id}")
+    return [row for row in payload if isinstance(row, dict)]
 
 
 def _first_present(record: dict[str, Any], keys: tuple[str, ...]) -> str | None:
@@ -202,7 +211,7 @@ def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_gene_set_page(detail: dict[str, Any], provenance: dict[str, Any]) -> dict[str, Any]:
+def build_gene_set_page(detail: dict[str, Any], provenance: dict[str, Any], graph_rows: list[dict[str, Any]]) -> dict[str, Any]:
     knowledge_graph = provenance.get("knowledge_graph")
     if not isinstance(knowledge_graph, dict):
         knowledge_graph = detail.get("knowledge_graph", {})
@@ -225,10 +234,12 @@ def build_gene_set_page(detail: dict[str, Any], provenance: dict[str, Any]) -> d
         "graph": build_graph_view(knowledge_graph),
         "graph_nodes": knowledge_graph.get("nodes", []),
         "graph_edges": knowledge_graph.get("edges", []),
+        "graph_rows": graph_rows,
         "detail_json": detail,
         "provenance_json": provenance,
         "detail_url": f"{GENESET_DETAIL_URL}?gene_set_id={detail.get('gene_set_id')}",
         "provenance_url": f"{GENESET_PROVENANCE_URL}?gene_set_id={detail.get('gene_set_id')}",
+        "graph_url": f"{GENESET_GRAPH_URL}?gene_set_id={detail.get('gene_set_id')}",
     }
 
 
@@ -404,12 +415,13 @@ def gene_set_detail(gene_set_id: int) -> str:
     try:
         detail = load_gene_set_detail(gene_set_id)
         provenance = load_gene_set_provenance(gene_set_id)
+        graph_rows = load_gene_set_graph(gene_set_id)
     except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
         abort(502, description=f"Could not load gene set {gene_set_id}: {exc}")
 
     return render_template(
         "gene_set_detail.html",
-        page=build_gene_set_page(detail, provenance),
+        page=build_gene_set_page(detail, provenance, graph_rows),
     )
 
 
