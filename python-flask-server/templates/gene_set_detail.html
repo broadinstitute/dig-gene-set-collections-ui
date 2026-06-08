@@ -215,7 +215,15 @@
       const edges = new vis.DataSet({{ page.graph.edges | tojson }});
       const options = {{ page.graph.options | tojson }};
 
-      new vis.Network(container, { nodes, edges }, options);
+      const network = new vis.Network(container, { nodes, edges }, options);
+      network.once("stabilizationIterationsDone", () => {
+        network.setOptions({ physics: false });
+      });
+      network.on("dragEnd", (event) => {
+        if (event.nodes && event.nodes.length > 0) {
+          network.setOptions({ physics: false });
+        }
+      });
     })();
   </script>
 </body>
