@@ -140,28 +140,38 @@ def build_filter_options(gene_sets: list[dict[str, Any]]) -> tuple[list[str], li
     return resource_options, modality_options, tissue_options
 
 
-def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
-    nodes = knowledge_graph.get("nodes", [])
-    edges = knowledge_graph.get("edges", [])
+def build_graph_view(graph_rows: list[dict[str, Any]]) -> dict[str, Any]:
     child_map: dict[str, list[str]] = defaultdict(list)
     indegree: dict[str, int] = defaultdict(int)
-    node_ids = {str(node["id"]) for node in nodes}
+    node_map: dict[str, dict[str, Any]] = {}
 
-    for edge in edges:
-        source = str(edge.get("source"))
-        target = str(edge.get("target"))
-        if source not in node_ids or target not in node_ids:
+    for row in graph_rows:
+        source = str(row.get("source_id"))
+        target = str(row.get("target_id"))
+        if not source or not target:
             continue
+        node_map[source] = {
+            "id": source,
+            "label": str(row.get("source_name") or source),
+            "type": str(row.get("source_type") or "Node"),
+            "title": str(row.get("source_name") or source),
+        }
+        node_map[target] = {
+            "id": target,
+            "label": str(row.get("target_name") or target),
+            "type": str(row.get("target_type") or "Node"),
+            "title": str(row.get("target_name") or target),
+        }
         child_map[source].append(target)
         indegree[target] += 1
         indegree.setdefault(source, 0)
 
     level_map: dict[str, int] = {}
     queue: deque[tuple[str, int]] = deque(
-        (node_id, 0) for node_id in node_ids if indegree.get(node_id, 0) == 0
+        (node_id, 0) for node_id in node_map if indegree.get(node_id, 0) == 0
     )
     if not queue:
-        queue.extend((node_id, 0) for node_id in node_ids)
+        queue.extend((node_id, 0) for node_id in node_map)
 
     while queue:
         node_id, level = queue.popleft()
@@ -172,7 +182,7 @@ def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
             queue.append((child_id, level + 1))
 
     vis_nodes: list[dict[str, Any]] = []
-    for node in nodes:
+    for node in node_map.values():
         node_id = str(node["id"])
         node_type = str(node.get("type", "Node"))
         if node_type == "GeneSet":
@@ -186,7 +196,7 @@ def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
                 "id": node_id,
                 "label": str(node.get("name") or node.get("label") or node_id),
                 "type": node_type,
-                "title": str(node.get("description", "") or node_id),
+                "title": str(node.get("title", "") or node_id),
                 "shape": "ellipse" if node_type == "GeneSet" else "box",
                 "level": level_map.get(node_id, 0),
                 "color": {
@@ -199,13 +209,14 @@ def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
         )
 
     vis_edges: list[dict[str, Any]] = []
-    for edge in edges:
+    for row in graph_rows:
         vis_edges.append(
             {
-                "from": str(edge.get("source")),
-                "to": str(edge.get("target")),
-                "label": str(edge.get("label", "")),
-                "title": str(edge.get("description", "") or edge.get("id", "")),
+                "id": str(row.get("edge_id", "")),
+                "from": str(row.get("source_id")),
+                "to": str(row.get("target_id")),
+                "label": str(row.get("edge_name", "")),
+                "title": str(row.get("edge_name", "") or row.get("edge_id", "")),
                 "arrows": "to",
                 "color": {"color": "#b3bcc5", "highlight": "#35669a"},
                 "font": {"align": "middle", "size": 11},
@@ -267,7 +278,7 @@ def build_gene_set_page(detail: dict[str, Any], provenance: dict[str, Any], grap
         "comparison_space_organism": detail.get("comparison_space_organism"),
         "modality": detail.get("modality"),
         "gene_symbols": gene_symbols,
-        "graph": build_graph_view(knowledge_graph),
+        "graph": build_graph_view(graph_rows),
         "graph_nodes": knowledge_graph.get("nodes", []),
         "graph_edges": knowledge_graph.get("edges", []),
         "graph_rows": graph_rows,
