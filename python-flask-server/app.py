@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from collections import defaultdict, deque
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -142,6 +143,34 @@ def build_filter_options(gene_sets: list[dict[str, Any]]) -> tuple[list[str], li
 def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
     nodes = knowledge_graph.get("nodes", [])
     edges = knowledge_graph.get("edges", [])
+    child_map: dict[str, list[str]] = defaultdict(list)
+    indegree: dict[str, int] = defaultdict(int)
+    node_ids = {str(node["id"]) for node in nodes}
+
+    for edge in edges:
+        source = str(edge.get("source"))
+        target = str(edge.get("target"))
+        if source not in node_ids or target not in node_ids:
+            continue
+        child_map[source].append(target)
+        indegree[target] += 1
+        indegree.setdefault(source, 0)
+
+    level_map: dict[str, int] = {}
+    queue: deque[tuple[str, int]] = deque(
+        (node_id, 0) for node_id in node_ids if indegree.get(node_id, 0) == 0
+    )
+    if not queue:
+        queue.extend((node_id, 0) for node_id in node_ids)
+
+    while queue:
+        node_id, level = queue.popleft()
+        if node_id in level_map and level_map[node_id] >= level:
+            continue
+        level_map[node_id] = level
+        for child_id in child_map.get(node_id, []):
+            queue.append((child_id, level + 1))
+
     vis_nodes: list[dict[str, Any]] = []
     for node in nodes:
         node_id = str(node["id"])
@@ -159,6 +188,7 @@ def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
                 "type": node_type,
                 "title": str(node.get("description", "") or node_id),
                 "shape": "ellipse" if node_type == "GeneSet" else "box",
+                "level": level_map.get(node_id, 0),
                 "color": {
                     "background": color,
                     "border": color,
@@ -189,6 +219,13 @@ def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
             "autoResize": True,
             "height": "520px",
             "layout": {
+                "hierarchical": {
+                    "enabled": True,
+                    "direction": "UD",
+                    "sortMethod": "directed",
+                    "nodeSpacing": 220,
+                    "levelSeparation": 180,
+                },
                 "improvedLayout": True,
             },
             "interaction": {
@@ -196,11 +233,10 @@ def build_graph_view(knowledge_graph: dict[str, Any]) -> dict[str, Any]:
                 "navigationButtons": True,
             },
             "physics": {
-                "enabled": True,
-                "stabilization": {"iterations": 150},
+                "enabled": False,
             },
             "edges": {
-                "smooth": {"type": "dynamic"},
+                "smooth": {"type": "cubicBezier", "forceDirection": "vertical", "roundness": 0.4},
                 "width": 2,
             },
             "nodes": {
