@@ -1,6 +1,12 @@
 
 
 
+20260608 - 
+
+modify the application so that if a GENESET_API_ROOT_ENV environment variable is present in the session
+it uses that for the web service server endpoint
+
+
 20260601 - fix errors
 when I deploy the application behind an ngnix server, I can reach the home page at 
 https://translator.broadinstitute.org/genetics_provider/geneset_collections/

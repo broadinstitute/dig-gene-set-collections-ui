@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -23,7 +24,8 @@ from retrieval import RevealRetrievalIndex, normalize_gene_list  # noqa: E402
 
 app = Flask(__name__)
 
-GENESET_API_ROOT = "https://translator.broadinstitute.org/genetics_provider/geneset_extractor"
+DEFAULT_GENESET_API_ROOT = "https://translator.broadinstitute.org/genetics_provider/geneset_extractor"
+GENESET_API_ROOT = os.getenv("GENESET_API_ROOT_ENV", DEFAULT_GENESET_API_ROOT).rstrip("/")
 GENESET_LIST_URL = f"{GENESET_API_ROOT}/gene-sets"
 GENESET_DETAIL_URL = f"{GENESET_API_ROOT}/gene-set"
 GENESET_PROVENANCE_URL = f"{GENESET_API_ROOT}/gene_set_provenance"
