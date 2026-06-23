@@ -194,9 +194,9 @@
           <tr>
             <td>{{ row.edge_id }}</td>
             <td>{{ row.edge_name }}</td>
-            <td>{{ row.source_name }}</td>
+            <td><a href="../provenance_node/{{ row.source_id }}" target="_blank" rel="noreferrer">{{ row.source_name }}</a></td>
             <td>{{ row.source_type }}</td>
-            <td>{{ row.target_name }}</td>
+            <td><a href="../provenance_node/{{ row.target_id }}" target="_blank" rel="noreferrer">{{ row.target_name }}</a></td>
             <td>{{ row.target_type }}</td>
           </tr>
           {% endfor %}

@@ -32,6 +32,7 @@ GENESET_LIST_URL = f"{GENESET_API_ROOT}/gene-sets"
 GENESET_DETAIL_URL = f"{GENESET_API_ROOT}/gene-set"
 GENESET_PROVENANCE_URL = f"{GENESET_API_ROOT}/gene_set_provenance"
 GENESET_GRAPH_URL = f"{GENESET_API_ROOT}/gene_set_graph"
+PROVENANCE_NODE_URL = f"{GENESET_API_ROOT}/provenance_node"
 
 
 @lru_cache(maxsize=1)
@@ -75,6 +76,30 @@ def fetch_remote_json(url: str) -> dict[str, Any] | list[Any]:
 
 
 @lru_cache(maxsize=512)
+def fetch_remote_response(url: str) -> tuple[bytes, str, str | None]:
+    app.logger.info("Fetching remote URL: %s", url)
+    with urlopen(url, timeout=20) as response:
+        body = response.read()
+        content_type = response.headers.get("Content-Type")
+        content_disposition = response.headers.get("Content-Disposition")
+
+    if content_type:
+        mime_type = content_type.split(";", 1)[0].strip() or "application/octet-stream"
+    else:
+        try:
+            json.loads(body.decode("utf-8"))
+            mime_type = "application/json"
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            try:
+                body.decode("utf-8")
+                mime_type = "text/plain"
+            except UnicodeDecodeError:
+                mime_type = "application/octet-stream"
+
+    return body, mime_type, content_disposition
+
+
+@lru_cache(maxsize=512)
 def load_gene_set_detail(gene_set_id: int) -> dict[str, Any]:
     payload = fetch_remote_json(f"{GENESET_DETAIL_URL}?gene_set_id={gene_set_id}")
     if not isinstance(payload, dict):
@@ -96,6 +121,11 @@ def load_gene_set_graph(gene_set_id: int) -> list[dict[str, Any]]:
     if not isinstance(payload, list):
         raise ValueError(f"Unexpected graph table payload for gene_set_id={gene_set_id}")
     return [row for row in payload if isinstance(row, dict)]
+
+
+@lru_cache(maxsize=512)
+def load_provenance_node(node_id: str) -> tuple[bytes, str, str | None]:
+    return fetch_remote_response(f"{PROVENANCE_NODE_URL}/{node_id}")
 
 
 def _first_present(record: dict[str, Any], keys: tuple[str, ...]) -> str | None:
@@ -472,6 +502,24 @@ def gene_set_detail(gene_set_id: int) -> str:
     return render_template(
         "gene_set_detail.html",
         page=build_gene_set_page(detail, provenance, graph_rows),
+    )
+
+
+@app.route("/provenance_node/<path:node_id>")
+def provenance_node(node_id: str):
+    try:
+        body, content_type, content_disposition = load_provenance_node(node_id)
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
+        abort(502, description=f"Could not load provenance node {node_id}: {exc}")
+
+    headers: dict[str, str] = {}
+    if content_disposition:
+        headers["Content-Disposition"] = content_disposition
+
+    return app.response_class(
+        body,
+        mimetype=content_type,
+        headers=headers,
     )
 
 
