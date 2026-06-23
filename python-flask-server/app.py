@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from collections import defaultdict, deque
@@ -23,6 +24,7 @@ from retrieval import RevealRetrievalIndex, normalize_gene_list  # noqa: E402
 
 
 app = Flask(__name__)
+app.logger.setLevel(logging.INFO)
 
 DEFAULT_GENESET_API_ROOT = "https://translator.broadinstitute.org/genetics_provider/geneset_extractor"
 GENESET_API_ROOT = os.getenv("GENESET_API_ROOT_ENV", DEFAULT_GENESET_API_ROOT).rstrip("/")
@@ -67,6 +69,7 @@ def load_gene_sets() -> list[dict[str, Any]]:
 
 @lru_cache(maxsize=512)
 def fetch_remote_json(url: str) -> dict[str, Any] | list[Any]:
+    app.logger.info("Fetching remote URL: %s", url)
     with urlopen(url, timeout=20) as response:
         return json.loads(response.read().decode("utf-8"))
 
