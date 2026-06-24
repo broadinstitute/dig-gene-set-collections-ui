@@ -12,7 +12,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 import pandas as pd
-from flask import Flask, abort, render_template, request, send_file
+from flask import Flask, abort, redirect, render_template, request, send_file
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -76,12 +76,13 @@ def fetch_remote_json(url: str) -> dict[str, Any] | list[Any]:
 
 
 @lru_cache(maxsize=512)
-def fetch_remote_response(url: str) -> tuple[bytes, str, str | None]:
+def fetch_remote_response(url: str) -> tuple[bytes, str, str | None, str]:
     app.logger.info("Fetching remote URL: %s", url)
     with urlopen(url, timeout=20) as response:
         body = response.read()
         content_type = response.headers.get("Content-Type")
         content_disposition = response.headers.get("Content-Disposition")
+        final_url = response.geturl()
 
     if content_type:
         mime_type = content_type.split(";", 1)[0].strip() or "application/octet-stream"
@@ -96,7 +97,7 @@ def fetch_remote_response(url: str) -> tuple[bytes, str, str | None]:
             except UnicodeDecodeError:
                 mime_type = "application/octet-stream"
 
-    return body, mime_type, content_disposition
+    return body, mime_type, content_disposition, final_url
 
 
 @lru_cache(maxsize=512)
@@ -124,7 +125,7 @@ def load_gene_set_graph(gene_set_id: int) -> list[dict[str, Any]]:
 
 
 @lru_cache(maxsize=512)
-def load_provenance_node(node_id: str) -> tuple[bytes, str, str | None]:
+def load_provenance_node(node_id: str) -> tuple[bytes, str, str | None, str]:
     return fetch_remote_response(f"{PROVENANCE_NODE_URL}/{node_id}")
 
 
@@ -508,9 +509,12 @@ def gene_set_detail(gene_set_id: int) -> str:
 @app.route("/provenance_node/<path:node_id>")
 def provenance_node(node_id: str):
     try:
-        body, content_type, content_disposition = load_provenance_node(node_id)
+        body, content_type, content_disposition, final_url = load_provenance_node(node_id)
     except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
         abort(502, description=f"Could not load provenance node {node_id}: {exc}")
+
+    if content_type == "text/html":
+        return redirect(final_url, code=302)
 
     headers: dict[str, str] = {}
     if content_disposition:
