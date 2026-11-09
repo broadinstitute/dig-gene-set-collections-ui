@@ -1,7 +1,46 @@
 
 
+20260623 - add links to nodes in table format
+[2026-06-23 13:39:58,833] INFO in app: Fetching remote URL: https://translator.broadinstitute.org/genetics_provider/geneset_extractor/provenance_node/263
+127.0.0.1 - - [23/Jun/2026 13:39:59] "GET /provenance_node/263 HTTP/1.1" 502 -
+https://translator.broadinstitute.org/genetics_provider/geneset_extractor/provenance_node/263 works in chrome
+
+
+the /provenance_node/140 should pass through to 
+GENESET_API_ROOT_ENV//provenance_node/140 to get the data 
+
+
+in the gene set details page, graph table section, add href links 
+to the source and target entries using the source_id and target_id fields returned by the web service /gene_set_graph call
+the links should open a new tab to the web server address /provenance_node/<id> where id is the source_id/target_id
+
+
+
 
 20260608 - 
+if not already doing this, for the gene set details page, query the web service /gene_set_graph?gene_set_id=<gene_set_id> call to 
+populate the graph vis-network element 
+
+if possible, put the target nodes of one source on the same hiarchical level 
+
+for the gene detail page graph, display the graph data in a hierarchical format with the source node on top of the 
+target nodes
+
+for the gene set details page, query the web service /gene_set_graph?gene_set_id=<gene_set_id> call to 
+retrieve the data and display a table of the results in table format in a section below 
+the gene set Graph display element
+
+
+if possible, add on option to the new vis-network graph display to stop the rebalancing 
+of nodes/edges if I move a node
+
+modify the graph display on the gene set details page to use the following javascript graph display library
+    <script type="text/javascript" src="https://visjs.github.io/vis-network/standalone/umd/vis-network.min.js"></script>
+
+modify the graph display on the gene set details page to add arrows on the edges from the source node to the target node
+
+
+modify the graph display on the gene set details page to be more of a top down from source node at top to target node below
 
 modify the application so that if a GENESET_API_ROOT_ENV environment variable is present in the session
 it uses that for the web service server endpoint
